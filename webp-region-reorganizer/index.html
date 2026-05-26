@@ -16,6 +16,9 @@
       --green: #62d394;
       --red: #ff6f6f;
       --yellow: #ffd166;
+
+      --piece-w: 120px;
+      --piece-h: 120px;
     }
 
     * {
@@ -32,13 +35,15 @@
     }
 
     header {
-      height: 70px;
+      height: 74px;
       display: flex;
       align-items: center;
       gap: 10px;
       padding: 10px 14px;
       background: #0b0e13;
       border-bottom: 1px solid var(--border);
+      position: relative;
+      z-index: 50;
     }
 
     h1 {
@@ -72,11 +77,11 @@
     }
 
     input[type="number"] {
-      width: 70px;
+      width: 76px;
     }
 
     input[type="range"] {
-      width: 100px;
+      width: 120px;
     }
 
     .row {
@@ -95,17 +100,18 @@
       margin-left: auto;
       color: var(--muted);
       font-size: 13px;
-      max-width: 340px;
+      max-width: 360px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
     main {
-      height: calc(100vh - 70px);
+      height: calc(100vh - 74px);
       display: grid;
-      grid-template-columns: 300px 1fr 340px;
+      grid-template-columns: 320px 1fr 350px;
       min-height: 0;
+      overflow: hidden;
     }
 
     .panel {
@@ -114,6 +120,8 @@
       min-height: 0;
       overflow: auto;
       padding: 12px;
+      position: relative;
+      z-index: 20;
     }
 
     .panel.right {
@@ -137,6 +145,8 @@
       display: grid;
       gap: 6px;
       margin-bottom: 14px;
+      max-height: 220px;
+      overflow: auto;
     }
 
     .file-item {
@@ -159,27 +169,39 @@
     }
 
     .tile-list {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      display: flex;
+      flex-wrap: wrap;
+      align-content: flex-start;
       gap: 8px;
+      min-height: 120px;
+      padding: 4px;
+      border-radius: 10px;
     }
 
     .tile {
-      width: 100%;
-      aspect-ratio: 1 / 1;
+      width: var(--piece-w);
+      height: var(--piece-h);
       background-repeat: no-repeat;
       background-color: #090c11;
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 6px;
       position: relative;
       cursor: grab;
       user-select: none;
       overflow: hidden;
+      flex: 0 0 auto;
     }
 
     .tile.selected {
       outline: 3px solid var(--yellow);
       z-index: 5;
+    }
+
+    .tile.dragging {
+      opacity: 0.82;
+      pointer-events: none;
+      z-index: 1000;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.45);
     }
 
     .tile:active {
@@ -199,20 +221,23 @@
     }
 
     .tile.grouped .tile-label {
-      background: rgba(88, 180, 255, 0.8);
+      background: rgba(88, 180, 255, 0.85);
     }
 
     .center {
       min-width: 0;
       min-height: 0;
       display: grid;
-      grid-template-rows: 1fr 1fr;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr;
+      overflow: visible;
+      position: relative;
+      z-index: 1;
     }
 
     .workspace-wrap,
     .output-wrap {
       min-height: 0;
-      overflow: auto;
       padding: 14px;
       background-color: #0e1118;
       background-image:
@@ -222,6 +247,12 @@
         linear-gradient(-45deg, transparent 75%, #111722 75%);
       background-size: 24px 24px;
       background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+      overflow: visible;
+      position: relative;
+    }
+
+    .workspace-wrap {
+      border-right: 1px solid var(--border);
     }
 
     .workspace-title,
@@ -230,27 +261,28 @@
       color: var(--muted);
       font-size: 13px;
       font-weight: 700;
+      pointer-events: none;
     }
 
     #freeWorkspace {
-      width: 1600px;
-      height: 900px;
+      width: 100%;
+      height: calc(100% - 24px);
+      min-height: 520px;
       position: relative;
       border: 2px dashed var(--border);
       border-radius: 12px;
       background: rgba(0,0,0,0.12);
+      overflow: visible;
     }
 
     #freeWorkspace .tile {
       position: absolute;
-      width: 120px;
-      height: 120px;
-      aspect-ratio: auto;
     }
 
     .output-scale {
       transform-origin: top left;
       width: max-content;
+      overflow: visible;
     }
 
     .grid {
@@ -260,11 +292,12 @@
       border: 2px solid var(--border);
       width: max-content;
       height: max-content;
+      overflow: visible;
     }
 
     .slot {
-      width: 120px;
-      height: 120px;
+      width: var(--piece-w);
+      height: var(--piece-h);
       background: var(--slot);
       position: relative;
       overflow: hidden;
@@ -288,12 +321,16 @@
       outline: 3px solid var(--accent);
     }
 
+    .slot.group-preview {
+      outline: 3px solid var(--yellow);
+      z-index: 10;
+    }
+
     .slot .tile {
       width: 100%;
       height: 100%;
       border-radius: 0;
       border: none;
-      aspect-ratio: auto;
     }
 
     .actions {
@@ -362,8 +399,13 @@
   </div>
 
   <div class="row">
-    <label>Zoom</label>
-    <input id="zoomInput" type="range" min="35" max="200" value="100">
+    <label>Piece Scale</label>
+    <input id="pieceScaleInput" type="range" min="10" max="100" value="100">
+  </div>
+
+  <div class="row">
+    <label>Output Zoom</label>
+    <input id="zoomInput" type="range" min="20" max="200" value="100">
   </div>
 
   <button id="rebuildBtn" disabled>Rebuild</button>
@@ -380,8 +422,7 @@
 
     <h2>Loose Pieces</h2>
     <div class="hint">
-      Drag pieces into the free workspace or directly into the output grid.
-      Click pieces to select them. Grouping only affects dragging, not export.
+      Pieces keep their real chunk shape. Drag pieces to the free workspace or final grid.
     </div>
 
     <div id="tileList" class="tile-list"></div>
@@ -389,7 +430,7 @@
 
   <section class="center">
     <section class="workspace-wrap">
-      <div class="workspace-title">Free Workspace — glue/group pieces here</div>
+      <div class="workspace-title">Free Workspace — group/glue pieces here</div>
       <div id="freeWorkspace"></div>
     </section>
 
@@ -402,12 +443,17 @@
   </section>
 
   <section class="panel right">
-    <h2>Tools</h2>
+    <h2>Grouping</h2>
 
     <div class="actions">
       <button id="groupBtn" disabled>Group Selected</button>
       <button id="ungroupBtn" disabled>Ungroup Selected</button>
       <button id="clearSelectionBtn" disabled>Clear Selection</button>
+    </div>
+
+    <h2>Output Grid</h2>
+
+    <div class="actions">
       <button id="autoFillBtn" disabled>Auto Fill Original Order</button>
       <button id="clearGridBtn" disabled>Clear Output Grid</button>
       <button id="resetBtn" class="danger" disabled>Reset Current Image</button>
@@ -416,9 +462,10 @@
     <h2>Export</h2>
 
     <div class="actions">
+      <button id="chooseOutputBtn" disabled>Choose Output Folder</button>
       <button id="previewBtn" disabled>Preview Merged Image</button>
-      <button id="downloadWebpBtn" disabled>Download WebP, Same Name</button>
-      <button id="downloadPngBtn" disabled>Download PNG</button>
+      <button id="downloadWebpBtn" disabled>Export WebP</button>
+      <button id="downloadPngBtn" disabled>Export PNG</button>
       <button id="nextBtn" disabled>Next File</button>
     </div>
 
@@ -431,17 +478,25 @@
       <div id="imageInfo">None</div>
       <br>
 
+      <strong>Piece size:</strong>
+      <div id="pieceInfo">None</div>
+      <br>
+
       <strong>Completion:</strong>
       <div id="completionText">0 / 0 slots filled</div>
       <br>
 
+      <strong>Output folder:</strong>
+      <div id="outputFolderText">None selected</div>
+      <br>
+
       <strong>Controls:</strong>
       <div>
-        Drag tile to output slot: place/swap.<br>
         Drag tile to free workspace: stage it.<br>
+        Drag free tile/group onto output grid: place it.<br>
         Double-click placed tile: return to loose pieces.<br>
         Click tile: select/unselect.<br>
-        Group selected: glued movement.
+        Group selected: glued movement inside free workspace.
       </div>
     </div>
 
@@ -459,6 +514,7 @@
 
   const colsInput = document.getElementById("colsInput");
   const rowsInput = document.getElementById("rowsInput");
+  const pieceScaleInput = document.getElementById("pieceScaleInput");
   const zoomInput = document.getElementById("zoomInput");
 
   const rebuildBtn = document.getElementById("rebuildBtn");
@@ -468,6 +524,8 @@
   const autoFillBtn = document.getElementById("autoFillBtn");
   const clearGridBtn = document.getElementById("clearGridBtn");
   const resetBtn = document.getElementById("resetBtn");
+
+  const chooseOutputBtn = document.getElementById("chooseOutputBtn");
   const previewBtn = document.getElementById("previewBtn");
   const downloadWebpBtn = document.getElementById("downloadWebpBtn");
   const downloadPngBtn = document.getElementById("downloadPngBtn");
@@ -476,7 +534,9 @@
   const statusEl = document.getElementById("status");
   const currentFileText = document.getElementById("currentFileText");
   const imageInfo = document.getElementById("imageInfo");
+  const pieceInfo = document.getElementById("pieceInfo");
   const completionText = document.getElementById("completionText");
+  const outputFolderText = document.getElementById("outputFolderText");
   const previewImage = document.getElementById("previewImage");
 
   let files = [];
@@ -485,10 +545,19 @@
   let sourceUrl = null;
   let sourceImage = new Image();
 
+  let inputFolderName = "images";
+  let outputRootHandle = null;
+  let outputFolderHandle = null;
+
   let rows = 5;
   let cols = 5;
+
   let tileW = 0;
   let tileH = 0;
+
+  let displayTileW = 0;
+  let displayTileH = 0;
+  let pieceScale = 1;
 
   let tiles = new Map();
   let selectedTileIds = new Set();
@@ -504,15 +573,23 @@
     outputScale.style.transform = `scale(${Number(zoomInput.value) / 100})`;
   });
 
+  pieceScaleInput.addEventListener("input", () => {
+    updateDisplayPieceSize();
+    applyCurrentPieceSizeToExistingTiles();
+    rebuildGridSlotSizing();
+  });
+
   groupBtn.addEventListener("click", groupSelected);
   ungroupBtn.addEventListener("click", ungroupSelected);
   clearSelectionBtn.addEventListener("click", clearSelection);
   autoFillBtn.addEventListener("click", autoFillOriginalOrder);
   clearGridBtn.addEventListener("click", clearOutputGrid);
   resetBtn.addEventListener("click", rebuildCurrentImage);
+
+  chooseOutputBtn.addEventListener("click", chooseOutputFolder);
   previewBtn.addEventListener("click", previewMergedImage);
-  downloadWebpBtn.addEventListener("click", () => downloadMergedImage("image/webp"));
-  downloadPngBtn.addEventListener("click", () => downloadMergedImage("image/png"));
+  downloadWebpBtn.addEventListener("click", () => exportMergedImage("image/webp"));
+  downloadPngBtn.addEventListener("click", () => exportMergedImage("image/png"));
   nextBtn.addEventListener("click", loadNextFile);
 
   tileList.addEventListener("dragover", event => {
@@ -555,8 +632,9 @@
     if (!tile) return;
 
     const rect = freeWorkspace.getBoundingClientRect();
-    const x = event.clientX - rect.left + freeWorkspace.scrollLeft - 60;
-    const y = event.clientY - rect.top + freeWorkspace.scrollTop - 60;
+
+    const x = event.clientX - rect.left - displayTileW / 2;
+    const y = event.clientY - rect.top - displayTileH / 2;
 
     placeTileInFreeWorkspace(tile, x, y);
     updateCompletion();
@@ -575,9 +653,22 @@
       return;
     }
 
+    const firstPath = files[0].webkitRelativePath || files[0].name;
+    inputFolderName = firstPath.includes("/")
+      ? firstPath.split("/")[0]
+      : "images";
+
+    outputRootHandle = null;
+    outputFolderHandle = null;
+    outputFolderText.textContent = "None selected";
+
     currentIndex = 0;
     renderFileList();
     loadFileAt(currentIndex);
+
+    chooseOutputBtn.disabled = false;
+
+    setStatus(`Loaded folder "${inputFolderName}". Choose an output folder.`, true);
   }
 
   function renderFileList() {
@@ -638,6 +729,8 @@
     tileW = sourceImage.naturalWidth / cols;
     tileH = sourceImage.naturalHeight / rows;
 
+    updateDisplayPieceSize();
+
     tiles.clear();
     selectedTileIds.clear();
     groupCounter = 1;
@@ -647,8 +740,7 @@
     grid.innerHTML = "";
     previewImage.style.display = "none";
 
-    grid.style.gridTemplateColumns = `repeat(${cols}, 120px)`;
-    grid.style.gridTemplateRows = `repeat(${rows}, 120px)`;
+    rebuildGridSlotSizing();
 
     for (let i = 0; i < rows * cols; i++) {
       const data = {
@@ -679,6 +771,7 @@
     }
 
     rebuildBtn.disabled = false;
+    chooseOutputBtn.disabled = false;
     groupBtn.disabled = false;
     ungroupBtn.disabled = false;
     clearSelectionBtn.disabled = false;
@@ -690,11 +783,39 @@
     updateCompletion();
   }
 
+  function updateDisplayPieceSize() {
+    pieceScale = Number(pieceScaleInput.value) / 100;
+
+    displayTileW = Math.max(1, tileW * pieceScale);
+    displayTileH = Math.max(1, tileH * pieceScale);
+
+    document.documentElement.style.setProperty("--piece-w", `${displayTileW}px`);
+    document.documentElement.style.setProperty("--piece-h", `${displayTileH}px`);
+
+    pieceInfo.textContent =
+      `${Math.round(tileW)} x ${Math.round(tileH)} source px, displayed ${Math.round(displayTileW)} x ${Math.round(displayTileH)} px`;
+  }
+
+  function rebuildGridSlotSizing() {
+    grid.style.gridTemplateColumns = `repeat(${cols}, var(--piece-w))`;
+    grid.style.gridTemplateRows = `repeat(${rows}, var(--piece-h))`;
+  }
+
+  function applyCurrentPieceSizeToExistingTiles() {
+    document.querySelectorAll(".tile").forEach(tile => {
+      tile.style.width = `${displayTileW}px`;
+      tile.style.height = `${displayTileH}px`;
+    });
+  }
+
   function createTileElement(data) {
     const tile = document.createElement("div");
     tile.className = "tile";
     tile.draggable = true;
     tile.dataset.tileId = data.id;
+
+    tile.style.width = `${displayTileW}px`;
+    tile.style.height = `${displayTileH}px`;
 
     applyTileBackground(tile, data);
 
@@ -705,6 +826,7 @@
 
     tile.addEventListener("dragstart", onTileDragStart);
     tile.addEventListener("dragend", onTileDragEnd);
+
     tile.addEventListener("dblclick", () => {
       makeTileLoose(tile);
       tileList.appendChild(tile);
@@ -739,11 +861,18 @@
   function onTileDragStart(event) {
     const tile = event.currentTarget;
 
+    if (tile.parentElement === freeWorkspace) {
+      event.preventDefault();
+      return;
+    }
+
     draggedTileId = tile.dataset.tileId;
     event.dataTransfer.setData("text/plain", draggedTileId);
     event.dataTransfer.effectAllowed = "move";
 
-    setTimeout(() => tile.style.opacity = "0.35", 0);
+    setTimeout(() => {
+      tile.style.opacity = "0.35";
+    }, 0);
   }
 
   function onTileDragEnd(event) {
@@ -774,10 +903,15 @@
     const tile = getTileEl(tileId);
     if (!tile) return;
 
+    placeSingleTileIntoSlot(tile, slot);
+    updateCompletion();
+  }
+
+  function placeSingleTileIntoSlot(tile, slot) {
     const sourceParent = tile.parentElement;
     const existing = slot.querySelector(".tile");
 
-    if (existing && sourceParent.classList.contains("slot")) {
+    if (existing && sourceParent && sourceParent.classList.contains("slot")) {
       sourceParent.appendChild(existing);
     } else if (existing) {
       makeTileLoose(existing);
@@ -786,8 +920,6 @@
 
     makeTileForSlot(tile);
     slot.appendChild(tile);
-
-    updateCompletion();
   }
 
   function beginFreeDrag(event, tile) {
@@ -810,14 +942,22 @@
     }
 
     freeDrag = {
+      anchorTileId: tileId,
       startX: event.clientX,
       startY: event.clientY,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      moved: false,
       tiles: movingTiles.map(el => ({
         el,
         x: Number.parseFloat(el.style.left || "0"),
         y: Number.parseFloat(el.style.top || "0")
       }))
     };
+
+    for (const item of freeDrag.tiles) {
+      item.el.classList.add("dragging");
+    }
 
     event.preventDefault();
   }
@@ -828,14 +968,138 @@
     const dx = event.clientX - freeDrag.startX;
     const dy = event.clientY - freeDrag.startY;
 
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+      freeDrag.moved = true;
+    }
+
+    freeDrag.lastX = event.clientX;
+    freeDrag.lastY = event.clientY;
+
     for (const item of freeDrag.tiles) {
       item.el.style.left = `${item.x + dx}px`;
       item.el.style.top = `${item.y + dy}px`;
     }
+
+    updateGridDropPreview(event.clientX, event.clientY);
   }
 
-  function endFreeDrag() {
+  function endFreeDrag(event) {
+    if (!freeDrag) return;
+
+    clearGridDropPreview();
+
+    const slot = getSlotUnderPoint(freeDrag.lastX, freeDrag.lastY);
+
+    for (const item of freeDrag.tiles) {
+      item.el.classList.remove("dragging");
+    }
+
+    if (slot && freeDrag.moved) {
+      placeFreeDragIntoGrid(freeDrag, slot);
+    }
+
     freeDrag = null;
+    updateCompletion();
+  }
+
+  function getSlotUnderPoint(x, y) {
+    const elements = document.elementsFromPoint(x, y);
+
+    for (const el of elements) {
+      if (el.classList && el.classList.contains("slot")) {
+        return el;
+      }
+
+      const slot = el.closest && el.closest(".slot");
+      if (slot) return slot;
+    }
+
+    return null;
+  }
+
+  function updateGridDropPreview(x, y) {
+    clearGridDropPreview();
+
+    if (!freeDrag) return;
+
+    const anchorSlot = getSlotUnderPoint(x, y);
+    if (!anchorSlot) return;
+
+    const targets = getGroupTargetSlots(freeDrag, anchorSlot);
+    for (const target of targets) {
+      if (target.slot) target.slot.classList.add("group-preview");
+    }
+  }
+
+  function clearGridDropPreview() {
+    document.querySelectorAll(".slot.group-preview").forEach(slot => {
+      slot.classList.remove("group-preview");
+    });
+  }
+
+  function placeFreeDragIntoGrid(drag, anchorSlot) {
+    const targets = getGroupTargetSlots(drag, anchorSlot);
+
+    if (targets.some(target => !target.slot)) {
+      setStatus("Group does not fit in the final output grid.", false);
+      return;
+    }
+
+    const movingSet = new Set(drag.tiles.map(item => item.el));
+
+    for (const target of targets) {
+      const existing = target.slot.querySelector(".tile");
+
+      if (existing && !movingSet.has(existing)) {
+        makeTileLoose(existing);
+        tileList.appendChild(existing);
+      }
+    }
+
+    for (const target of targets) {
+      makeTileForSlot(target.el);
+      target.slot.appendChild(target.el);
+    }
+
+    setStatus(`Placed ${targets.length} region${targets.length === 1 ? "" : "s"} into final output.`, true);
+  }
+
+  function getGroupTargetSlots(drag, anchorSlot) {
+    const anchorTileItem = drag.tiles.find(item => item.el.dataset.tileId === drag.anchorTileId) || drag.tiles[0];
+
+    const anchorFreeCol = Math.round(anchorTileItem.x / displayTileW);
+    const anchorFreeRow = Math.round(anchorTileItem.y / displayTileH);
+
+    const anchorIndex = Number(anchorSlot.dataset.slotIndex);
+    const anchorGridCol = anchorIndex % cols;
+    const anchorGridRow = Math.floor(anchorIndex / cols);
+
+    return drag.tiles.map(item => {
+      const itemFreeCol = Math.round(item.x / displayTileW);
+      const itemFreeRow = Math.round(item.y / displayTileH);
+
+      const offsetCol = itemFreeCol - anchorFreeCol;
+      const offsetRow = itemFreeRow - anchorFreeRow;
+
+      const targetCol = anchorGridCol + offsetCol;
+      const targetRow = anchorGridRow + offsetRow;
+
+      const slot = getSlotAtGridPosition(targetCol, targetRow);
+
+      return {
+        el: item.el,
+        slot
+      };
+    });
+  }
+
+  function getSlotAtGridPosition(col, row) {
+    if (col < 0 || row < 0 || col >= cols || row >= rows) {
+      return null;
+    }
+
+    const index = row * cols + col;
+    return grid.querySelector(`.slot[data-slot-index="${index}"]`);
   }
 
   function placeTileInFreeWorkspace(tile, x, y) {
@@ -851,28 +1115,27 @@
     tile.style.position = "";
     tile.style.left = "";
     tile.style.top = "";
-    tile.style.width = "";
-    tile.style.height = "";
-    tile.style.aspectRatio = "";
+    tile.style.width = `${displayTileW}px`;
+    tile.style.height = `${displayTileH}px`;
   }
 
   function makeTileForSlot(tile) {
     tile.style.position = "";
     tile.style.left = "";
     tile.style.top = "";
-    tile.style.width = "";
-    tile.style.height = "";
-    tile.style.aspectRatio = "";
+    tile.style.width = `${displayTileW}px`;
+    tile.style.height = `${displayTileH}px`;
   }
 
   function makeTileForFreeWorkspace(tile) {
     tile.style.position = "absolute";
-    tile.style.width = "120px";
-    tile.style.height = "120px";
-    tile.style.aspectRatio = "auto";
+    tile.style.width = `${displayTileW}px`;
+    tile.style.height = `${displayTileH}px`;
   }
 
   function toggleSelect(tileId) {
+    if (freeDrag) return;
+
     if (selectedTileIds.has(tileId)) {
       selectedTileIds.delete(tileId);
     } else {
@@ -895,7 +1158,7 @@
 
   function groupSelected() {
     if (selectedTileIds.size < 2) {
-      setStatus("Select at least two pieces first. One piece is not a group, genius.", false);
+      setStatus("Select at least two pieces first. One piece is not a group.", false);
       return;
     }
 
@@ -974,7 +1237,7 @@
 
     if (complete) {
       setStatus("Output grid complete. Export unlocked.", true);
-    } else {
+    } else if (currentFile) {
       setStatus("Output grid incomplete. Export locked.", null);
     }
   }
@@ -1033,46 +1296,86 @@
     }
   }
 
-  function downloadMergedImage(mimeType) {
+  async function chooseOutputFolder() {
+    if (!window.showDirectoryPicker) {
+      setStatus("Your browser does not support folder writing. Use Chrome/Chromium.", false);
+      return;
+    }
+
+    try {
+      outputRootHandle = await window.showDirectoryPicker({
+        mode: "readwrite"
+      });
+
+      outputFolderHandle = await outputRootHandle.getDirectoryHandle(
+        `${inputFolderName}-reforged`,
+        { create: true }
+      );
+
+      outputFolderText.textContent = `${inputFolderName}-reforged`;
+      setStatus(`Output folder ready: ${inputFolderName}-reforged`, true);
+    } catch (err) {
+      setStatus("Output folder was not selected.", false);
+    }
+  }
+
+  async function exportMergedImage(mimeType) {
     try {
       const canvas = makeMergedCanvas();
+      const filename = getExportFilename(mimeType);
 
-      const originalName = currentFile.name;
-      const baseName = originalName.replace(/\.[^.]+$/, "");
+      const blob = await new Promise(resolve => {
+        canvas.toBlob(resolve, mimeType, 0.95);
+      });
 
-      let filename;
-
-      if (mimeType === "image/webp") {
-        filename = originalName.toLowerCase().endsWith(".webp")
-          ? originalName
-          : `${baseName}.webp`;
-      } else {
-        filename = `${baseName}.png`;
+      if (!blob) {
+        setStatus("Export failed. Browser did not create the file.", false);
+        return;
       }
 
-      canvas.toBlob(blob => {
-        if (!blob) {
-          setStatus("Export failed. Browser did not create the file.", false);
-          return;
+      if (!outputFolderHandle) {
+        if (window.showDirectoryPicker) {
+          await chooseOutputFolder();
         }
 
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
+        if (!outputFolderHandle) {
+          setStatus("No output folder selected. Export cancelled.", false);
+          return;
+        }
+      }
 
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
+      await writeBlobToOutputFolder(filename, blob);
 
-        a.remove();
-        URL.revokeObjectURL(url);
-
-        setStatus(`Downloaded ${filename}`, true);
-      }, mimeType, 0.95);
+      setStatus(`Saved ${filename} to ${inputFolderName}-reforged`, true);
 
     } catch (err) {
-      setStatus(err.message, false);
+      setStatus(err.message || "Export failed.", false);
     }
+  }
+
+  function getExportFilename(mimeType) {
+    const originalName = currentFile.name;
+    const baseName = originalName.replace(/\.[^.]+$/, "");
+
+    if (mimeType === "image/webp") {
+      return `${baseName}.webp`;
+    }
+
+    if (mimeType === "image/png") {
+      return `${baseName}.png`;
+    }
+
+    return `${baseName}.img`;
+  }
+
+  async function writeBlobToOutputFolder(filename, blob) {
+    const fileHandle = await outputFolderHandle.getFileHandle(filename, {
+      create: true
+    });
+
+    const writable = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
   }
 
   function loadNextFile() {
@@ -1098,9 +1401,7 @@
 
   function clampInt(value, min, max) {
     const n = Number.parseInt(value, 10);
-
     if (Number.isNaN(n)) return min;
-
     return Math.max(min, Math.min(max, n));
   }
 
