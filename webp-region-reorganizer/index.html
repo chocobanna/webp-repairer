@@ -2,19 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Manual WebP Region Reorganizer</title>
+  <title>Folder WebP Region Reorganizer</title>
   <style>
     :root {
-      --bg: #111318;
-      --panel: #191d25;
-      --panel-2: #202632;
-      --text: #e8edf7;
-      --muted: #9aa6b8;
-      --accent: #6aa6ff;
-      --danger: #ff6a6a;
-      --ok: #60d394;
-      --border: #343b4a;
-      --slot-empty: #151922;
+      --bg: #101218;
+      --panel: #181d26;
+      --panel2: #202735;
+      --slot: #111722;
+      --text: #e7edf8;
+      --muted: #9aa7b8;
+      --border: #343d4f;
+      --accent: #68a8ff;
+      --green: #62d394;
+      --red: #ff6f6f;
+      --yellow: #ffd166;
     }
 
     * {
@@ -23,46 +24,42 @@
 
     body {
       margin: 0;
+      height: 100vh;
+      overflow: hidden;
       font-family: system-ui, sans-serif;
       background: var(--bg);
       color: var(--text);
-      height: 100vh;
-      overflow: hidden;
     }
 
     header {
-      height: 64px;
+      height: 70px;
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 10px 16px;
-      background: #0d0f14;
+      gap: 10px;
+      padding: 10px 14px;
+      background: #0b0e13;
       border-bottom: 1px solid var(--border);
     }
 
-    header h1 {
-      font-size: 18px;
-      margin: 0 14px 0 0;
+    h1 {
+      font-size: 17px;
+      margin: 0 10px 0 0;
       white-space: nowrap;
     }
 
-    input,
     button,
+    input,
     select {
-      background: var(--panel-2);
+      background: var(--panel2);
       color: var(--text);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 8px 10px;
     }
 
-    input[type="number"] {
-      width: 72px;
-    }
-
     button {
       cursor: pointer;
-      font-weight: 600;
+      font-weight: 700;
     }
 
     button:hover:not(:disabled) {
@@ -70,20 +67,44 @@
     }
 
     button:disabled {
-      opacity: 0.35;
+      opacity: 0.4;
       cursor: not-allowed;
+    }
+
+    input[type="number"] {
+      width: 70px;
+    }
+
+    input[type="range"] {
+      width: 100px;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .row label {
+      color: var(--muted);
+      font-size: 13px;
     }
 
     .status {
       margin-left: auto;
       color: var(--muted);
-      font-size: 14px;
+      font-size: 13px;
+      max-width: 340px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     main {
+      height: calc(100vh - 70px);
       display: grid;
-      grid-template-columns: 320px 1fr 320px;
-      height: calc(100vh - 64px);
+      grid-template-columns: 300px 1fr 340px;
       min-height: 0;
     }
 
@@ -92,42 +113,142 @@
       border-right: 1px solid var(--border);
       min-height: 0;
       overflow: auto;
-      padding: 14px;
+      padding: 12px;
     }
 
     .panel.right {
-      border-right: none;
+      border-right: 0;
       border-left: 1px solid var(--border);
     }
 
-    .panel h2 {
+    h2 {
+      font-size: 15px;
       margin: 0 0 10px;
-      font-size: 16px;
     }
 
     .hint {
       color: var(--muted);
       font-size: 13px;
       line-height: 1.4;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
-    .workspace-wrap {
+    .file-list {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .file-item {
+      padding: 7px 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #111722;
+      color: var(--muted);
+      font-size: 13px;
+      cursor: pointer;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .file-item.active {
+      color: white;
+      border-color: var(--accent);
+      background: #16243a;
+    }
+
+    .tile-list {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .tile {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      background-repeat: no-repeat;
+      background-color: #090c11;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      position: relative;
+      cursor: grab;
+      user-select: none;
+      overflow: hidden;
+    }
+
+    .tile.selected {
+      outline: 3px solid var(--yellow);
+      z-index: 5;
+    }
+
+    .tile:active {
+      cursor: grabbing;
+    }
+
+    .tile-label {
+      position: absolute;
+      right: 5px;
+      bottom: 5px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 2px 6px;
+      font-size: 11px;
+      border-radius: 999px;
+      pointer-events: none;
+    }
+
+    .tile.grouped .tile-label {
+      background: rgba(88, 180, 255, 0.8);
+    }
+
+    .center {
       min-width: 0;
       min-height: 0;
-      overflow: auto;
-      padding: 20px;
-      background:
-        linear-gradient(45deg, #111318 25%, transparent 25%),
-        linear-gradient(-45deg, #111318 25%, transparent 25%),
-        linear-gradient(45deg, transparent 75%, #111318 75%),
-        linear-gradient(-45deg, transparent 75%, #111318 75%);
-      background-size: 24px 24px;
-      background-position: 0 0, 0 12px, 12px -12px, -12px 0;
-      background-color: #0f1218;
+      display: grid;
+      grid-template-rows: 1fr 1fr;
     }
 
-    .workspace-scale {
+    .workspace-wrap,
+    .output-wrap {
+      min-height: 0;
+      overflow: auto;
+      padding: 14px;
+      background-color: #0e1118;
+      background-image:
+        linear-gradient(45deg, #111722 25%, transparent 25%),
+        linear-gradient(-45deg, #111722 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #111722 75%),
+        linear-gradient(-45deg, transparent 75%, #111722 75%);
+      background-size: 24px 24px;
+      background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+    }
+
+    .workspace-title,
+    .output-title {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    #freeWorkspace {
+      width: 1600px;
+      height: 900px;
+      position: relative;
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      background: rgba(0,0,0,0.12);
+    }
+
+    #freeWorkspace .tile {
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      aspect-ratio: auto;
+    }
+
+    .output-scale {
       transform-origin: top left;
       width: max-content;
     }
@@ -144,10 +265,10 @@
     .slot {
       width: 120px;
       height: 120px;
-      background: var(--slot-empty);
+      background: var(--slot);
       position: relative;
       overflow: hidden;
-      outline: 1px solid rgba(255,255,255,0.05);
+      outline: 1px solid rgba(255,255,255,0.06);
     }
 
     .slot::after {
@@ -155,38 +276,16 @@
       position: absolute;
       left: 6px;
       top: 4px;
+      color: rgba(255,255,255,0.35);
       font-size: 11px;
-      color: rgba(255,255,255,0.4);
-      pointer-events: none;
       text-shadow: 0 1px 2px black;
+      pointer-events: none;
     }
 
-    .slot.drag-over {
+    .slot.drag-over,
+    #freeWorkspace.drag-over,
+    #tileList.drag-over {
       outline: 3px solid var(--accent);
-      z-index: 3;
-    }
-
-    .tile-list {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 8px;
-    }
-
-    .tile {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 1 / 1;
-      background-repeat: no-repeat;
-      background-color: #0b0d12;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      cursor: grab;
-      overflow: hidden;
-      user-select: none;
-    }
-
-    .tile:active {
-      cursor: grabbing;
     }
 
     .slot .tile {
@@ -197,245 +296,341 @@
       aspect-ratio: auto;
     }
 
-    .tile-label {
-      position: absolute;
-      right: 5px;
-      bottom: 5px;
-      background: rgba(0,0,0,0.65);
-      color: white;
-      font-size: 11px;
-      padding: 2px 5px;
-      border-radius: 999px;
-      pointer-events: none;
-    }
-
     .actions {
       display: grid;
       gap: 8px;
+      margin-bottom: 12px;
     }
 
     .danger {
-      border-color: #633;
-      color: #ffb0b0;
+      color: #ffb4b4;
+      border-color: #604040;
     }
 
-    .ok {
-      color: var(--ok);
+    .good {
+      color: var(--green);
     }
 
     .bad {
-      color: var(--danger);
+      color: var(--red);
     }
 
-    .info-box {
+    .info {
       background: #111722;
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 10px;
-      margin-top: 10px;
       font-size: 13px;
       color: var(--muted);
       line-height: 1.45;
-    }
-
-    .small-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-right: 6px;
-      white-space: nowrap;
-    }
-
-    .small-row label {
-      color: var(--muted);
-      font-size: 13px;
+      margin-bottom: 12px;
     }
 
     #previewImage {
-      max-width: 100%;
+      display: none;
+      width: 100%;
       border: 1px solid var(--border);
       border-radius: 8px;
-      background: #0b0d12;
-      display: none;
-      margin-top: 10px;
+      background: #090c11;
     }
 
     .empty {
-      color: var(--muted);
-      font-size: 13px;
       border: 1px dashed var(--border);
+      color: var(--muted);
       border-radius: 10px;
-      padding: 12px;
+      padding: 10px;
       text-align: center;
+      font-size: 13px;
     }
   </style>
 </head>
+
 <body>
 <header>
-  <h1>WebP Region Reorganizer</h1>
+  <h1>WebP Folder Reorganizer</h1>
 
-  <input id="fileInput" type="file" accept="image/webp,image/png,image/jpeg,image/*" />
+  <input id="folderInput" type="file" accept="image/*" webkitdirectory multiple />
 
-  <div class="small-row">
-    <label for="colsInput">Cols</label>
-    <input id="colsInput" type="number" min="1" max="50" value="5" />
+  <div class="row">
+    <label>Cols</label>
+    <input id="colsInput" type="number" min="1" max="80" value="5">
   </div>
 
-  <div class="small-row">
-    <label for="rowsInput">Rows</label>
-    <input id="rowsInput" type="number" min="1" max="50" value="5" />
+  <div class="row">
+    <label>Rows</label>
+    <input id="rowsInput" type="number" min="1" max="80" value="5">
   </div>
 
-  <div class="small-row">
-    <label for="zoomInput">Zoom</label>
-    <input id="zoomInput" type="range" min="35" max="200" value="100" />
+  <div class="row">
+    <label>Zoom</label>
+    <input id="zoomInput" type="range" min="35" max="200" value="100">
   </div>
 
-  <button id="buildBtn">Build Workspace</button>
+  <button id="rebuildBtn" disabled>Rebuild</button>
 
-  <div id="status" class="status">Load an image.</div>
+  <div id="status" class="status">Select a folder.</div>
 </header>
 
 <main>
   <section class="panel">
-    <h2>Pieces</h2>
+    <h2>Folder Files</h2>
+    <div id="fileList" class="file-list">
+      <div class="empty">No folder selected.</div>
+    </div>
+
+    <h2>Loose Pieces</h2>
     <div class="hint">
-      Drag pieces into the workspace. This is not one merged image yet.
-      Export stays locked until every slot is filled.
+      Drag pieces into the free workspace or directly into the output grid.
+      Click pieces to select them. Grouping only affects dragging, not export.
     </div>
-    <div id="tileList" class="tile-list">
-      <div class="empty">No image loaded.</div>
-    </div>
+
+    <div id="tileList" class="tile-list"></div>
   </section>
 
-  <section class="workspace-wrap">
-    <div id="workspaceScale" class="workspace-scale">
-      <div id="grid" class="grid"></div>
-    </div>
+  <section class="center">
+    <section class="workspace-wrap">
+      <div class="workspace-title">Free Workspace — glue/group pieces here</div>
+      <div id="freeWorkspace"></div>
+    </section>
+
+    <section class="output-wrap">
+      <div class="output-title">Final Output Grid — export uses this layout</div>
+      <div id="outputScale" class="output-scale">
+        <div id="grid" class="grid"></div>
+      </div>
+    </section>
   </section>
 
   <section class="panel right">
+    <h2>Tools</h2>
+
+    <div class="actions">
+      <button id="groupBtn" disabled>Group Selected</button>
+      <button id="ungroupBtn" disabled>Ungroup Selected</button>
+      <button id="clearSelectionBtn" disabled>Clear Selection</button>
+      <button id="autoFillBtn" disabled>Auto Fill Original Order</button>
+      <button id="clearGridBtn" disabled>Clear Output Grid</button>
+      <button id="resetBtn" class="danger" disabled>Reset Current Image</button>
+    </div>
+
     <h2>Export</h2>
 
     <div class="actions">
-      <button id="autoFillBtn" disabled>Auto Fill Original Order</button>
-      <button id="clearBtn" class="danger" disabled>Clear Workspace</button>
       <button id="previewBtn" disabled>Preview Merged Image</button>
+      <button id="downloadWebpBtn" disabled>Download WebP, Same Name</button>
       <button id="downloadPngBtn" disabled>Download PNG</button>
-      <button id="downloadWebpBtn" disabled>Download WebP</button>
+      <button id="nextBtn" disabled>Next File</button>
     </div>
 
-    <div class="info-box">
-      <strong>Completion:</strong>
-      <div id="completionText">0 / 0 slots filled</div>
+    <div class="info">
+      <strong>Current file:</strong>
+      <div id="currentFileText">None</div>
       <br>
+
       <strong>Image:</strong>
       <div id="imageInfo">None</div>
       <br>
+
+      <strong>Completion:</strong>
+      <div id="completionText">0 / 0 slots filled</div>
+      <br>
+
       <strong>Controls:</strong>
       <div>
-        Drag tile onto empty slot: place.<br>
-        Drag tile onto filled slot: swap.<br>
-        Double-click a placed tile: return to pieces.
+        Drag tile to output slot: place/swap.<br>
+        Drag tile to free workspace: stage it.<br>
+        Double-click placed tile: return to loose pieces.<br>
+        Click tile: select/unselect.<br>
+        Group selected: glued movement.
       </div>
     </div>
 
-    <img id="previewImage" alt="Merged preview" />
+    <img id="previewImage" alt="Preview">
   </section>
 </main>
 
 <script>
-  const fileInput = document.getElementById("fileInput");
+  const folderInput = document.getElementById("folderInput");
+  const fileList = document.getElementById("fileList");
+  const tileList = document.getElementById("tileList");
+  const freeWorkspace = document.getElementById("freeWorkspace");
+  const grid = document.getElementById("grid");
+  const outputScale = document.getElementById("outputScale");
+
   const colsInput = document.getElementById("colsInput");
   const rowsInput = document.getElementById("rowsInput");
   const zoomInput = document.getElementById("zoomInput");
-  const buildBtn = document.getElementById("buildBtn");
 
-  const tileList = document.getElementById("tileList");
-  const grid = document.getElementById("grid");
-  const workspaceScale = document.getElementById("workspaceScale");
+  const rebuildBtn = document.getElementById("rebuildBtn");
+  const groupBtn = document.getElementById("groupBtn");
+  const ungroupBtn = document.getElementById("ungroupBtn");
+  const clearSelectionBtn = document.getElementById("clearSelectionBtn");
+  const autoFillBtn = document.getElementById("autoFillBtn");
+  const clearGridBtn = document.getElementById("clearGridBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const previewBtn = document.getElementById("previewBtn");
+  const downloadWebpBtn = document.getElementById("downloadWebpBtn");
+  const downloadPngBtn = document.getElementById("downloadPngBtn");
+  const nextBtn = document.getElementById("nextBtn");
 
   const statusEl = document.getElementById("status");
-  const completionText = document.getElementById("completionText");
+  const currentFileText = document.getElementById("currentFileText");
   const imageInfo = document.getElementById("imageInfo");
+  const completionText = document.getElementById("completionText");
   const previewImage = document.getElementById("previewImage");
 
-  const autoFillBtn = document.getElementById("autoFillBtn");
-  const clearBtn = document.getElementById("clearBtn");
-  const previewBtn = document.getElementById("previewBtn");
-  const downloadPngBtn = document.getElementById("downloadPngBtn");
-  const downloadWebpBtn = document.getElementById("downloadWebpBtn");
-
-  let sourceImage = new Image();
+  let files = [];
+  let currentIndex = -1;
+  let currentFile = null;
   let sourceUrl = null;
-  let imageLoaded = false;
+  let sourceImage = new Image();
 
   let rows = 5;
   let cols = 5;
   let tileW = 0;
   let tileH = 0;
 
+  let tiles = new Map();
+  let selectedTileIds = new Set();
+  let groupCounter = 1;
+
   let draggedTileId = null;
+  let freeDrag = null;
 
-  const tiles = new Map();
-
-  fileInput.addEventListener("change", loadImage);
-  buildBtn.addEventListener("click", buildWorkspace);
+  folderInput.addEventListener("change", loadFolder);
+  rebuildBtn.addEventListener("click", rebuildCurrentImage);
 
   zoomInput.addEventListener("input", () => {
-    workspaceScale.style.transform = `scale(${Number(zoomInput.value) / 100})`;
+    outputScale.style.transform = `scale(${Number(zoomInput.value) / 100})`;
   });
 
+  groupBtn.addEventListener("click", groupSelected);
+  ungroupBtn.addEventListener("click", ungroupSelected);
+  clearSelectionBtn.addEventListener("click", clearSelection);
   autoFillBtn.addEventListener("click", autoFillOriginalOrder);
-  clearBtn.addEventListener("click", clearWorkspace);
+  clearGridBtn.addEventListener("click", clearOutputGrid);
+  resetBtn.addEventListener("click", rebuildCurrentImage);
   previewBtn.addEventListener("click", previewMergedImage);
-  downloadPngBtn.addEventListener("click", () => downloadMergedImage("image/png", "reorganized.png"));
-  downloadWebpBtn.addEventListener("click", () => downloadMergedImage("image/webp", "reorganized.webp"));
+  downloadWebpBtn.addEventListener("click", () => downloadMergedImage("image/webp"));
+  downloadPngBtn.addEventListener("click", () => downloadMergedImage("image/png"));
+  nextBtn.addEventListener("click", loadNextFile);
 
-  function setStatus(text, good = null) {
-    statusEl.textContent = text;
-    statusEl.className = "status";
-    if (good === true) statusEl.classList.add("ok");
-    if (good === false) statusEl.classList.add("bad");
-  }
+  tileList.addEventListener("dragover", event => {
+    event.preventDefault();
+    tileList.classList.add("drag-over");
+  });
 
-  function loadImage() {
-    const file = fileInput.files[0];
+  tileList.addEventListener("dragleave", () => {
+    tileList.classList.remove("drag-over");
+  });
 
-    if (!file) {
+  tileList.addEventListener("drop", event => {
+    event.preventDefault();
+    tileList.classList.remove("drag-over");
+
+    const tileId = event.dataTransfer.getData("text/plain") || draggedTileId;
+    const tile = getTileEl(tileId);
+    if (!tile) return;
+
+    makeTileLoose(tile);
+    tileList.appendChild(tile);
+    updateCompletion();
+  });
+
+  freeWorkspace.addEventListener("dragover", event => {
+    event.preventDefault();
+    freeWorkspace.classList.add("drag-over");
+  });
+
+  freeWorkspace.addEventListener("dragleave", () => {
+    freeWorkspace.classList.remove("drag-over");
+  });
+
+  freeWorkspace.addEventListener("drop", event => {
+    event.preventDefault();
+    freeWorkspace.classList.remove("drag-over");
+
+    const tileId = event.dataTransfer.getData("text/plain") || draggedTileId;
+    const tile = getTileEl(tileId);
+    if (!tile) return;
+
+    const rect = freeWorkspace.getBoundingClientRect();
+    const x = event.clientX - rect.left + freeWorkspace.scrollLeft - 60;
+    const y = event.clientY - rect.top + freeWorkspace.scrollTop - 60;
+
+    placeTileInFreeWorkspace(tile, x, y);
+    updateCompletion();
+  });
+
+  document.addEventListener("mousemove", onFreeMouseMove);
+  document.addEventListener("mouseup", endFreeDrag);
+
+  function loadFolder() {
+    files = [...folderInput.files]
+      .filter(file => file.type.startsWith("image/"))
+      .sort((a, b) => naturalCompare(a.webkitRelativePath || a.name, b.webkitRelativePath || b.name));
+
+    if (files.length === 0) {
+      setStatus("No images found in folder.", false);
       return;
     }
 
-    if (sourceUrl) {
-      URL.revokeObjectURL(sourceUrl);
-    }
+    currentIndex = 0;
+    renderFileList();
+    loadFileAt(currentIndex);
+  }
 
-    sourceUrl = URL.createObjectURL(file);
+  function renderFileList() {
+    fileList.innerHTML = "";
+
+    files.forEach((file, index) => {
+      const item = document.createElement("div");
+      item.className = "file-item";
+      if (index === currentIndex) item.classList.add("active");
+
+      item.textContent = file.webkitRelativePath || file.name;
+      item.title = file.webkitRelativePath || file.name;
+
+      item.addEventListener("click", () => {
+        currentIndex = index;
+        renderFileList();
+        loadFileAt(index);
+      });
+
+      fileList.appendChild(item);
+    });
+  }
+
+  function loadFileAt(index) {
+    if (index < 0 || index >= files.length) return;
+
+    currentFile = files[index];
+
+    if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+    sourceUrl = URL.createObjectURL(currentFile);
+
     sourceImage = new Image();
 
     sourceImage.onload = () => {
-      imageLoaded = true;
+      currentFileText.textContent = currentFile.webkitRelativePath || currentFile.name;
       imageInfo.textContent = `${sourceImage.naturalWidth} x ${sourceImage.naturalHeight}px`;
-      setStatus("Image loaded. Build the workspace.", true);
-      buildWorkspace();
+      setStatus(`Loaded ${currentFile.name}`, true);
+      rebuildCurrentImage();
     };
 
     sourceImage.onerror = () => {
-      imageLoaded = false;
-      setStatus("Failed to load image. Browser probably hates your file.", false);
+      setStatus(`Failed to load ${currentFile.name}`, false);
     };
 
     sourceImage.src = sourceUrl;
+    renderFileList();
   }
 
-  function buildWorkspace() {
-    if (!imageLoaded) {
-      setStatus("Load an image first.", false);
-      return;
-    }
+  function rebuildCurrentImage() {
+    if (!currentFile || !sourceImage.complete) return;
 
-    rows = clampInt(rowsInput.value, 1, 50);
-    cols = clampInt(colsInput.value, 1, 50);
+    rows = clampInt(rowsInput.value, 1, 80);
+    cols = clampInt(colsInput.value, 1, 80);
 
     rowsInput.value = rows;
     colsInput.value = cols;
@@ -444,7 +639,11 @@
     tileH = sourceImage.naturalHeight / rows;
 
     tiles.clear();
+    selectedTileIds.clear();
+    groupCounter = 1;
+
     tileList.innerHTML = "";
+    freeWorkspace.innerHTML = "";
     grid.innerHTML = "";
     previewImage.style.display = "none";
 
@@ -452,20 +651,18 @@
     grid.style.gridTemplateRows = `repeat(${rows}, 120px)`;
 
     for (let i = 0; i < rows * cols; i++) {
-      const srcCol = i % cols;
-      const srcRow = Math.floor(i / cols);
-
-      const tileData = {
+      const data = {
         id: `tile-${i}`,
         originalIndex: i,
-        srcCol,
-        srcRow
+        srcCol: i % cols,
+        srcRow: Math.floor(i / cols),
+        groupId: null
       };
 
-      tiles.set(tileData.id, tileData);
+      tiles.set(data.id, data);
 
-      const tileEl = createTileElement(tileData);
-      tileList.appendChild(tileEl);
+      const tile = createTileElement(data);
+      tileList.appendChild(tile);
     }
 
     for (let i = 0; i < rows * cols; i++) {
@@ -481,56 +678,72 @@
       grid.appendChild(slot);
     }
 
+    rebuildBtn.disabled = false;
+    groupBtn.disabled = false;
+    ungroupBtn.disabled = false;
+    clearSelectionBtn.disabled = false;
     autoFillBtn.disabled = false;
-    clearBtn.disabled = false;
+    clearGridBtn.disabled = false;
+    resetBtn.disabled = false;
+    nextBtn.disabled = currentIndex >= files.length - 1;
 
     updateCompletion();
-
-    setStatus(`Workspace ready: ${cols} x ${rows}.`, true);
   }
 
-  function createTileElement(tileData) {
+  function createTileElement(data) {
     const tile = document.createElement("div");
     tile.className = "tile";
     tile.draggable = true;
-    tile.dataset.tileId = tileData.id;
+    tile.dataset.tileId = data.id;
 
-    applyTileBackground(tile, tileData);
+    applyTileBackground(tile, data);
 
     const label = document.createElement("div");
     label.className = "tile-label";
-    label.textContent = tileData.originalIndex + 1;
+    label.textContent = data.originalIndex + 1;
     tile.appendChild(label);
 
     tile.addEventListener("dragstart", onTileDragStart);
     tile.addEventListener("dragend", onTileDragEnd);
-    tile.addEventListener("dblclick", returnTileToList);
+    tile.addEventListener("dblclick", () => {
+      makeTileLoose(tile);
+      tileList.appendChild(tile);
+      updateCompletion();
+    });
+
+    tile.addEventListener("click", event => {
+      event.stopPropagation();
+      toggleSelect(tile.dataset.tileId);
+    });
+
+    tile.addEventListener("mousedown", event => {
+      if (tile.parentElement !== freeWorkspace) return;
+      beginFreeDrag(event, tile);
+    });
 
     return tile;
   }
 
-  function applyTileBackground(tile, tileData) {
-    const scaleX = cols * 100;
-    const scaleY = rows * 100;
+  function applyTileBackground(tile, data) {
+    const bgW = cols * 100;
+    const bgH = rows * 100;
 
-    const posX = cols === 1 ? 0 : (tileData.srcCol / (cols - 1)) * 100;
-    const posY = rows === 1 ? 0 : (tileData.srcRow / (rows - 1)) * 100;
+    const posX = cols === 1 ? 0 : (data.srcCol / (cols - 1)) * 100;
+    const posY = rows === 1 ? 0 : (data.srcRow / (rows - 1)) * 100;
 
     tile.style.backgroundImage = `url("${sourceUrl}")`;
-    tile.style.backgroundSize = `${scaleX}% ${scaleY}%`;
+    tile.style.backgroundSize = `${bgW}% ${bgH}%`;
     tile.style.backgroundPosition = `${posX}% ${posY}%`;
   }
 
   function onTileDragStart(event) {
     const tile = event.currentTarget;
-    draggedTileId = tile.dataset.tileId;
 
+    draggedTileId = tile.dataset.tileId;
     event.dataTransfer.setData("text/plain", draggedTileId);
     event.dataTransfer.effectAllowed = "move";
 
-    setTimeout(() => {
-      tile.style.opacity = "0.35";
-    }, 0);
+    setTimeout(() => tile.style.opacity = "0.35", 0);
   }
 
   function onTileDragEnd(event) {
@@ -558,47 +771,189 @@
     slot.classList.remove("drag-over");
 
     const tileId = event.dataTransfer.getData("text/plain") || draggedTileId;
-    if (!tileId) return;
+    const tile = getTileEl(tileId);
+    if (!tile) return;
 
-    const draggedEl = document.querySelector(`[data-tile-id="${tileId}"]`);
-    if (!draggedEl) return;
+    const sourceParent = tile.parentElement;
+    const existing = slot.querySelector(".tile");
 
-    const sourceParent = draggedEl.parentElement;
-    const targetExistingTile = slot.querySelector(".tile");
-
-    if (targetExistingTile && sourceParent.classList.contains("slot")) {
-      sourceParent.appendChild(targetExistingTile);
-    } else if (targetExistingTile) {
-      tileList.appendChild(targetExistingTile);
+    if (existing && sourceParent.classList.contains("slot")) {
+      sourceParent.appendChild(existing);
+    } else if (existing) {
+      makeTileLoose(existing);
+      tileList.appendChild(existing);
     }
 
-    slot.appendChild(draggedEl);
+    makeTileForSlot(tile);
+    slot.appendChild(tile);
+
     updateCompletion();
   }
 
-  function returnTileToList(event) {
-    const tile = event.currentTarget;
-    tileList.appendChild(tile);
-    updateCompletion();
+  function beginFreeDrag(event, tile) {
+    if (event.button !== 0) return;
+
+    const tileId = tile.dataset.tileId;
+    const data = tiles.get(tileId);
+    const groupId = data.groupId;
+
+    let movingTiles;
+
+    if (groupId) {
+      movingTiles = [...document.querySelectorAll(".tile")]
+        .filter(el => {
+          const d = tiles.get(el.dataset.tileId);
+          return d && d.groupId === groupId && el.parentElement === freeWorkspace;
+        });
+    } else {
+      movingTiles = [tile];
+    }
+
+    freeDrag = {
+      startX: event.clientX,
+      startY: event.clientY,
+      tiles: movingTiles.map(el => ({
+        el,
+        x: Number.parseFloat(el.style.left || "0"),
+        y: Number.parseFloat(el.style.top || "0")
+      }))
+    };
+
+    event.preventDefault();
+  }
+
+  function onFreeMouseMove(event) {
+    if (!freeDrag) return;
+
+    const dx = event.clientX - freeDrag.startX;
+    const dy = event.clientY - freeDrag.startY;
+
+    for (const item of freeDrag.tiles) {
+      item.el.style.left = `${item.x + dx}px`;
+      item.el.style.top = `${item.y + dy}px`;
+    }
+  }
+
+  function endFreeDrag() {
+    freeDrag = null;
+  }
+
+  function placeTileInFreeWorkspace(tile, x, y) {
+    makeTileForFreeWorkspace(tile);
+
+    tile.style.left = `${Math.max(0, x)}px`;
+    tile.style.top = `${Math.max(0, y)}px`;
+
+    freeWorkspace.appendChild(tile);
+  }
+
+  function makeTileLoose(tile) {
+    tile.style.position = "";
+    tile.style.left = "";
+    tile.style.top = "";
+    tile.style.width = "";
+    tile.style.height = "";
+    tile.style.aspectRatio = "";
+  }
+
+  function makeTileForSlot(tile) {
+    tile.style.position = "";
+    tile.style.left = "";
+    tile.style.top = "";
+    tile.style.width = "";
+    tile.style.height = "";
+    tile.style.aspectRatio = "";
+  }
+
+  function makeTileForFreeWorkspace(tile) {
+    tile.style.position = "absolute";
+    tile.style.width = "120px";
+    tile.style.height = "120px";
+    tile.style.aspectRatio = "auto";
+  }
+
+  function toggleSelect(tileId) {
+    if (selectedTileIds.has(tileId)) {
+      selectedTileIds.delete(tileId);
+    } else {
+      selectedTileIds.add(tileId);
+    }
+
+    updateSelectionVisuals();
+  }
+
+  function clearSelection() {
+    selectedTileIds.clear();
+    updateSelectionVisuals();
+  }
+
+  function updateSelectionVisuals() {
+    document.querySelectorAll(".tile").forEach(tile => {
+      tile.classList.toggle("selected", selectedTileIds.has(tile.dataset.tileId));
+    });
+  }
+
+  function groupSelected() {
+    if (selectedTileIds.size < 2) {
+      setStatus("Select at least two pieces first. One piece is not a group, genius.", false);
+      return;
+    }
+
+    const groupId = `group-${groupCounter++}`;
+
+    selectedTileIds.forEach(tileId => {
+      const data = tiles.get(tileId);
+      const tile = getTileEl(tileId);
+
+      if (!data || !tile) return;
+
+      data.groupId = groupId;
+      tile.classList.add("grouped");
+      tile.querySelector(".tile-label").textContent = `${data.originalIndex + 1} G`;
+    });
+
+    setStatus(`Grouped ${selectedTileIds.size} pieces.`, true);
+    updateSelectionVisuals();
+  }
+
+  function ungroupSelected() {
+    if (selectedTileIds.size === 0) return;
+
+    selectedTileIds.forEach(tileId => {
+      const data = tiles.get(tileId);
+      const tile = getTileEl(tileId);
+
+      if (!data || !tile) return;
+
+      data.groupId = null;
+      tile.classList.remove("grouped");
+      tile.querySelector(".tile-label").textContent = data.originalIndex + 1;
+    });
+
+    setStatus("Ungrouped selected pieces.", true);
   }
 
   function autoFillOriginalOrder() {
-    clearWorkspace();
+    clearOutputGrid();
 
-    const allSlots = [...grid.querySelectorAll(".slot")];
+    const slots = [...grid.querySelectorAll(".slot")];
 
-    for (const [tileId] of tiles) {
-      const tileEl = document.querySelector(`[data-tile-id="${tileId}"]`);
-      const index = Number(tileId.replace("tile-", ""));
-      allSlots[index].appendChild(tileEl);
+    for (const [tileId, data] of tiles) {
+      const tile = getTileEl(tileId);
+      if (!tile) continue;
+
+      makeTileForSlot(tile);
+      slots[data.originalIndex].appendChild(tile);
     }
 
     updateCompletion();
   }
 
-  function clearWorkspace() {
-    const placedTiles = [...grid.querySelectorAll(".tile")];
-    for (const tile of placedTiles) {
+  function clearOutputGrid() {
+    const placed = [...grid.querySelectorAll(".tile")];
+
+    for (const tile of placed) {
+      makeTileLoose(tile);
       tileList.appendChild(tile);
     }
 
@@ -614,13 +969,13 @@
     completionText.textContent = `${filled} / ${total} slots filled`;
 
     previewBtn.disabled = !complete;
-    downloadPngBtn.disabled = !complete;
     downloadWebpBtn.disabled = !complete;
+    downloadPngBtn.disabled = !complete;
 
     if (complete) {
-      setStatus("Complete. Export unlocked.", true);
-    } else if (total > 0) {
-      setStatus("Workspace incomplete. Export locked.", null);
+      setStatus("Output grid complete. Export unlocked.", true);
+    } else {
+      setStatus("Output grid incomplete. Export locked.", null);
     }
   }
 
@@ -635,17 +990,16 @@
     const slots = [...grid.querySelectorAll(".slot")];
 
     for (let destIndex = 0; destIndex < slots.length; destIndex++) {
-      const slot = slots[destIndex];
-      const tileEl = slot.querySelector(".tile");
+      const tile = slots[destIndex].querySelector(".tile");
 
-      if (!tileEl) {
-        throw new Error("Workspace is not complete.");
+      if (!tile) {
+        throw new Error("Output grid incomplete.");
       }
 
-      const tileData = tiles.get(tileEl.dataset.tileId);
+      const data = tiles.get(tile.dataset.tileId);
 
-      const sx = tileData.srcCol * tileW;
-      const sy = tileData.srcRow * tileH;
+      const sx = data.srcCol * tileW;
+      const sy = data.srcRow * tileH;
 
       const destCol = destIndex % cols;
       const destRow = Math.floor(destIndex / cols);
@@ -679,13 +1033,26 @@
     }
   }
 
-  function downloadMergedImage(mimeType, filename) {
+  function downloadMergedImage(mimeType) {
     try {
       const canvas = makeMergedCanvas();
 
+      const originalName = currentFile.name;
+      const baseName = originalName.replace(/\.[^.]+$/, "");
+
+      let filename;
+
+      if (mimeType === "image/webp") {
+        filename = originalName.toLowerCase().endsWith(".webp")
+          ? originalName
+          : `${baseName}.webp`;
+      } else {
+        filename = `${baseName}.png`;
+      }
+
       canvas.toBlob(blob => {
         if (!blob) {
-          setStatus("Export failed. Your browser may not support this format.", false);
+          setStatus("Export failed. Browser did not create the file.", false);
           return;
         }
 
@@ -700,21 +1067,48 @@
         a.remove();
         URL.revokeObjectURL(url);
 
-        setStatus(`Downloaded ${filename}.`, true);
+        setStatus(`Downloaded ${filename}`, true);
       }, mimeType, 0.95);
+
     } catch (err) {
       setStatus(err.message, false);
     }
   }
 
+  function loadNextFile() {
+    if (currentIndex + 1 >= files.length) return;
+
+    currentIndex++;
+    renderFileList();
+    loadFileAt(currentIndex);
+  }
+
+  function getTileEl(tileId) {
+    if (!tileId) return null;
+    return document.querySelector(`[data-tile-id="${CSS.escape(tileId)}"]`);
+  }
+
+  function setStatus(text, state = null) {
+    statusEl.textContent = text;
+    statusEl.className = "status";
+
+    if (state === true) statusEl.classList.add("good");
+    if (state === false) statusEl.classList.add("bad");
+  }
+
   function clampInt(value, min, max) {
     const n = Number.parseInt(value, 10);
 
-    if (Number.isNaN(n)) {
-      return min;
-    }
+    if (Number.isNaN(n)) return min;
 
     return Math.max(min, Math.min(max, n));
+  }
+
+  function naturalCompare(a, b) {
+    return a.localeCompare(b, undefined, {
+      numeric: true,
+      sensitivity: "base"
+    });
   }
 </script>
 </body>
