@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Manual WebP Region Reorganizer</title>
+  <style>
+    :root {
+      --bg: #111318;
+      --panel: #191d25;
+      --panel-2: #202632;
+      --text: #e8edf7;
+      --muted: #9aa6b8;
+      --accent: #6aa6ff;
+      --danger: #ff6a6a;
+      --ok: #60d394;
+      --border: #343b4a;
+      --slot-empty: #151922;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      height: 64px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      background: #0d0f14;
+      border-bottom: 1px solid var(--border);
+    }
+
+    header h1 {
+      font-size: 18px;
+      margin: 0 14px 0 0;
+      white-space: nowrap;
+    }
+
+    input,
+    button,
+    select {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+
+    input[type="number"] {
+      width: 72px;
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    button:hover:not(:disabled) {
+      border-color: var(--accent);
+    }
+
+    button:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .status {
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: 320px 1fr 320px;
+      height: calc(100vh - 64px);
+      min-height: 0;
+    }
+
+    .panel {
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      min-height: 0;
+      overflow: auto;
+      padding: 14px;
+    }
+
+    .panel.right {
+      border-right: none;
+      border-left: 1px solid var(--border);
+    }
+
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 16px;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
+
+    .workspace-wrap {
+      min-width: 0;
+      min-height: 0;
+      overflow: auto;
+      padding: 20px;
+      background:
+        linear-gradient(45deg, #111318 25%, transparent 25%),
+        linear-gradient(-45deg, #111318 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #111318 75%),
+        linear-gradient(-45deg, transparent 75%, #111318 75%);
+      background-size: 24px 24px;
+      background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+      background-color: #0f1218;
+    }
+
+    .workspace-scale {
+      transform-origin: top left;
+      width: max-content;
+    }
+
+    .grid {
+      display: grid;
+      gap: 2px;
+      background: var(--border);
+      border: 2px solid var(--border);
+      width: max-content;
+      height: max-content;
+    }
+
+    .slot {
+      width: 120px;
+      height: 120px;
+      background: var(--slot-empty);
+      position: relative;
+      overflow: hidden;
+      outline: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .slot::after {
+      content: attr(data-label);
+      position: absolute;
+      left: 6px;
+      top: 4px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.4);
+      pointer-events: none;
+      text-shadow: 0 1px 2px black;
+    }
+
+    .slot.drag-over {
+      outline: 3px solid var(--accent);
+      z-index: 3;
+    }
+
+    .tile-list {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .tile {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      background-repeat: no-repeat;
+      background-color: #0b0d12;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: grab;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .tile:active {
+      cursor: grabbing;
+    }
+
+    .slot .tile {
+      width: 100%;
+      height: 100%;
+      border-radius: 0;
+      border: none;
+      aspect-ratio: auto;
+    }
+
+    .tile-label {
+      position: absolute;
+      right: 5px;
+      bottom: 5px;
+      background: rgba(0,0,0,0.65);
+      color: white;
+      font-size: 11px;
+      padding: 2px 5px;
+      border-radius: 999px;
+      pointer-events: none;
+    }
+
+    .actions {
+      display: grid;
+      gap: 8px;
+    }
+
+    .danger {
+      border-color: #633;
+      color: #ffb0b0;
+    }
+
+    .ok {
+      color: var(--ok);
+    }
+
+    .bad {
+      color: var(--danger);
+    }
+
+    .info-box {
+      background: #111722;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .small-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-right: 6px;
+      white-space: nowrap;
+    }
+
+    .small-row label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    #previewImage {
+      max-width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #0b0d12;
+      display: none;
+      margin-top: 10px;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-size: 13px;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>WebP Region Reorganizer</h1>
+
+  <input id="fileInput" type="file" accept="image/webp,image/png,image/jpeg,image/*" />
+
+  <div class="small-row">
+    <label for="colsInput">Cols</label>
+    <input id="colsInput" type="number" min="1" max="50" value="5" />
+  </div>
+
+  <div class="small-row">
+    <label for="rowsInput">Rows</label>
+    <input id="rowsInput" type="number" min="1" max="50" value="5" />
+  </div>
+
+  <div class="small-row">
+    <label for="zoomInput">Zoom</label>
+    <input id="zoomInput" type="range" min="35" max="200" value="100" />
+  </div>
+
+  <button id="buildBtn">Build Workspace</button>
+
+  <div id="status" class="status">Load an image.</div>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>Pieces</h2>
+    <div class="hint">
+      Drag pieces into the workspace. This is not one merged image yet.
+      Export stays locked until every slot is filled.
+    </div>
+    <div id="tileList" class="tile-list">
+      <div class="empty">No image loaded.</div>
+    </div>
+  </section>
+
+  <section class="workspace-wrap">
+    <div id="workspaceScale" class="workspace-scale">
+      <div id="grid" class="grid"></div>
+    </div>
+  </section>
+
+  <section class="panel right">
+    <h2>Export</h2>
+
+    <div class="actions">
+      <button id="autoFillBtn" disabled>Auto Fill Original Order</button>
+      <button id="clearBtn" class="danger" disabled>Clear Workspace</button>
+      <button id="previewBtn" disabled>Preview Merged Image</button>
+      <button id="downloadPngBtn" disabled>Download PNG</button>
+      <button id="downloadWebpBtn" disabled>Download WebP</button>
+    </div>
+
+    <div class="info-box">
+      <strong>Completion:</strong>
+      <div id="completionText">0 / 0 slots filled</div>
+      <br>
+      <strong>Image:</strong>
+      <div id="imageInfo">None</div>
+      <br>
+      <strong>Controls:</strong>
+      <div>
+        Drag tile onto empty slot: place.<br>
+        Drag tile onto filled slot: swap.<br>
+        Double-click a placed tile: return to pieces.
+      </div>
+    </div>
+
+    <img id="previewImage" alt="Merged preview" />
+  </section>
+</main>
+
+<script>
+  const fileInput = document.getElementById("fileInput");
+  const colsInput = document.getElementById("colsInput");
+  const rowsInput = document.getElementById("rowsInput");
+  const zoomInput = document.getElementById("zoomInput");
+  const buildBtn = document.getElementById("buildBtn");
+
+  const tileList = document.getElementById("tileList");
+  const grid = document.getElementById("grid");
+  const workspaceScale = document.getElementById("workspaceScale");
+
+  const statusEl = document.getElementById("status");
+  const completionText = document.getElementById("completionText");
+  const imageInfo = document.getElementById("imageInfo");
+  const previewImage = document.getElementById("previewImage");
+
+  const autoFillBtn = document.getElementById("autoFillBtn");
+  const clearBtn = document.getElementById("clearBtn");
+  const previewBtn = document.getElementById("previewBtn");
+  const downloadPngBtn = document.getElementById("downloadPngBtn");
+  const downloadWebpBtn = document.getElementById("downloadWebpBtn");
+
+  let sourceImage = new Image();
+  let sourceUrl = null;
+  let imageLoaded = false;
+
+  let rows = 5;
+  let cols = 5;
+  let tileW = 0;
+  let tileH = 0;
+
+  let draggedTileId = null;
+
+  const tiles = new Map();
+
+  fileInput.addEventListener("change", loadImage);
+  buildBtn.addEventListener("click", buildWorkspace);
+
+  zoomInput.addEventListener("input", () => {
+    workspaceScale.style.transform = `scale(${Number(zoomInput.value) / 100})`;
+  });
+
+  autoFillBtn.addEventListener("click", autoFillOriginalOrder);
+  clearBtn.addEventListener("click", clearWorkspace);
+  previewBtn.addEventListener("click", previewMergedImage);
+  downloadPngBtn.addEventListener("click", () => downloadMergedImage("image/png", "reorganized.png"));
+  downloadWebpBtn.addEventListener("click", () => downloadMergedImage("image/webp", "reorganized.webp"));
+
+  function setStatus(text, good = null) {
+    statusEl.textContent = text;
+    statusEl.className = "status";
+    if (good === true) statusEl.classList.add("ok");
+    if (good === false) statusEl.classList.add("bad");
+  }
+
+  function loadImage() {
+    const file = fileInput.files[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (sourceUrl) {
+      URL.revokeObjectURL(sourceUrl);
+    }
+
+    sourceUrl = URL.createObjectURL(file);
+    sourceImage = new Image();
+
+    sourceImage.onload = () => {
+      imageLoaded = true;
+      imageInfo.textContent = `${sourceImage.naturalWidth} x ${sourceImage.naturalHeight}px`;
+      setStatus("Image loaded. Build the workspace.", true);
+      buildWorkspace();
+    };
+
+    sourceImage.onerror = () => {
+      imageLoaded = false;
+      setStatus("Failed to load image. Browser probably hates your file.", false);
+    };
+
+    sourceImage.src = sourceUrl;
+  }
+
+  function buildWorkspace() {
+    if (!imageLoaded) {
+      setStatus("Load an image first.", false);
+      return;
+    }
+
+    rows = clampInt(rowsInput.value, 1, 50);
+    cols = clampInt(colsInput.value, 1, 50);
+
+    rowsInput.value = rows;
+    colsInput.value = cols;
+
+    tileW = sourceImage.naturalWidth / cols;
+    tileH = sourceImage.naturalHeight / rows;
+
+    tiles.clear();
+    tileList.innerHTML = "";
+    grid.innerHTML = "";
+    previewImage.style.display = "none";
+
+    grid.style.gridTemplateColumns = `repeat(${cols}, 120px)`;
+    grid.style.gridTemplateRows = `repeat(${rows}, 120px)`;
+
+    for (let i = 0; i < rows * cols; i++) {
+      const srcCol = i % cols;
+      const srcRow = Math.floor(i / cols);
+
+      const tileData = {
+        id: `tile-${i}`,
+        originalIndex: i,
+        srcCol,
+        srcRow
+      };
+
+      tiles.set(tileData.id, tileData);
+
+      const tileEl = createTileElement(tileData);
+      tileList.appendChild(tileEl);
+    }
+
+    for (let i = 0; i < rows * cols; i++) {
+      const slot = document.createElement("div");
+      slot.className = "slot";
+      slot.dataset.slotIndex = String(i);
+      slot.dataset.label = i + 1;
+
+      slot.addEventListener("dragover", onSlotDragOver);
+      slot.addEventListener("dragleave", onSlotDragLeave);
+      slot.addEventListener("drop", onSlotDrop);
+
+      grid.appendChild(slot);
+    }
+
+    autoFillBtn.disabled = false;
+    clearBtn.disabled = false;
+
+    updateCompletion();
+
+    setStatus(`Workspace ready: ${cols} x ${rows}.`, true);
+  }
+
+  function createTileElement(tileData) {
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    tile.draggable = true;
+    tile.dataset.tileId = tileData.id;
+
+    applyTileBackground(tile, tileData);
+
+    const label = document.createElement("div");
+    label.className = "tile-label";
+    label.textContent = tileData.originalIndex + 1;
+    tile.appendChild(label);
+
+    tile.addEventListener("dragstart", onTileDragStart);
+    tile.addEventListener("dragend", onTileDragEnd);
+    tile.addEventListener("dblclick", returnTileToList);
+
+    return tile;
+  }
+
+  function applyTileBackground(tile, tileData) {
+    const scaleX = cols * 100;
+    const scaleY = rows * 100;
+
+    const posX = cols === 1 ? 0 : (tileData.srcCol / (cols - 1)) * 100;
+    const posY = rows === 1 ? 0 : (tileData.srcRow / (rows - 1)) * 100;
+
+    tile.style.backgroundImage = `url("${sourceUrl}")`;
+    tile.style.backgroundSize = `${scaleX}% ${scaleY}%`;
+    tile.style.backgroundPosition = `${posX}% ${posY}%`;
+  }
+
+  function onTileDragStart(event) {
+    const tile = event.currentTarget;
+    draggedTileId = tile.dataset.tileId;
+
+    event.dataTransfer.setData("text/plain", draggedTileId);
+    event.dataTransfer.effectAllowed = "move";
+
+    setTimeout(() => {
+      tile.style.opacity = "0.35";
+    }, 0);
+  }
+
+  function onTileDragEnd(event) {
+    event.currentTarget.style.opacity = "1";
+    draggedTileId = null;
+
+    document.querySelectorAll(".slot.drag-over").forEach(slot => {
+      slot.classList.remove("drag-over");
+    });
+  }
+
+  function onSlotDragOver(event) {
+    event.preventDefault();
+    event.currentTarget.classList.add("drag-over");
+  }
+
+  function onSlotDragLeave(event) {
+    event.currentTarget.classList.remove("drag-over");
+  }
+
+  function onSlotDrop(event) {
+    event.preventDefault();
+
+    const slot = event.currentTarget;
+    slot.classList.remove("drag-over");
+
+    const tileId = event.dataTransfer.getData("text/plain") || draggedTileId;
+    if (!tileId) return;
+
+    const draggedEl = document.querySelector(`[data-tile-id="${tileId}"]`);
+    if (!draggedEl) return;
+
+    const sourceParent = draggedEl.parentElement;
+    const targetExistingTile = slot.querySelector(".tile");
+
+    if (targetExistingTile && sourceParent.classList.contains("slot")) {
+      sourceParent.appendChild(targetExistingTile);
+    } else if (targetExistingTile) {
+      tileList.appendChild(targetExistingTile);
+    }
+
+    slot.appendChild(draggedEl);
+    updateCompletion();
+  }
+
+  function returnTileToList(event) {
+    const tile = event.currentTarget;
+    tileList.appendChild(tile);
+    updateCompletion();
+  }
+
+  function autoFillOriginalOrder() {
+    clearWorkspace();
+
+    const allSlots = [...grid.querySelectorAll(".slot")];
+
+    for (const [tileId] of tiles) {
+      const tileEl = document.querySelector(`[data-tile-id="${tileId}"]`);
+      const index = Number(tileId.replace("tile-", ""));
+      allSlots[index].appendChild(tileEl);
+    }
+
+    updateCompletion();
+  }
+
+  function clearWorkspace() {
+    const placedTiles = [...grid.querySelectorAll(".tile")];
+    for (const tile of placedTiles) {
+      tileList.appendChild(tile);
+    }
+
+    previewImage.style.display = "none";
+    updateCompletion();
+  }
+
+  function updateCompletion() {
+    const total = rows * cols;
+    const filled = grid.querySelectorAll(".slot .tile").length;
+    const complete = total > 0 && filled === total;
+
+    completionText.textContent = `${filled} / ${total} slots filled`;
+
+    previewBtn.disabled = !complete;
+    downloadPngBtn.disabled = !complete;
+    downloadWebpBtn.disabled = !complete;
+
+    if (complete) {
+      setStatus("Complete. Export unlocked.", true);
+    } else if (total > 0) {
+      setStatus("Workspace incomplete. Export locked.", null);
+    }
+  }
+
+  function makeMergedCanvas() {
+    const canvas = document.createElement("canvas");
+    canvas.width = sourceImage.naturalWidth;
+    canvas.height = sourceImage.naturalHeight;
+
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = false;
+
+    const slots = [...grid.querySelectorAll(".slot")];
+
+    for (let destIndex = 0; destIndex < slots.length; destIndex++) {
+      const slot = slots[destIndex];
+      const tileEl = slot.querySelector(".tile");
+
+      if (!tileEl) {
+        throw new Error("Workspace is not complete.");
+      }
+
+      const tileData = tiles.get(tileEl.dataset.tileId);
+
+      const sx = tileData.srcCol * tileW;
+      const sy = tileData.srcRow * tileH;
+
+      const destCol = destIndex % cols;
+      const destRow = Math.floor(destIndex / cols);
+
+      const dx = destCol * tileW;
+      const dy = destRow * tileH;
+
+      ctx.drawImage(
+        sourceImage,
+        sx,
+        sy,
+        tileW,
+        tileH,
+        dx,
+        dy,
+        tileW,
+        tileH
+      );
+    }
+
+    return canvas;
+  }
+
+  function previewMergedImage() {
+    try {
+      const canvas = makeMergedCanvas();
+      previewImage.src = canvas.toDataURL("image/png");
+      previewImage.style.display = "block";
+    } catch (err) {
+      setStatus(err.message, false);
+    }
+  }
+
+  function downloadMergedImage(mimeType, filename) {
+    try {
+      const canvas = makeMergedCanvas();
+
+      canvas.toBlob(blob => {
+        if (!blob) {
+          setStatus("Export failed. Your browser may not support this format.", false);
+          return;
+        }
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+
+        a.remove();
+        URL.revokeObjectURL(url);
+
+        setStatus(`Downloaded ${filename}.`, true);
+      }, mimeType, 0.95);
+    } catch (err) {
+      setStatus(err.message, false);
+    }
+  }
+
+  function clampInt(value, min, max) {
+    const n = Number.parseInt(value, 10);
+
+    if (Number.isNaN(n)) {
+      return min;
+    }
+
+    return Math.max(min, Math.min(max, n));
+  }
+</script>
+</body>
+</html>

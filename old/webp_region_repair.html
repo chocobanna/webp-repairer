@@ -1,0 +1,1424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebP Region Repair Tool</title>
+  <style>
+    :root {
+      --bg: #101218;
+      --panel: #1a1f2b;
+      --panel2: #252c3b;
+      --text: #e9edf5;
+      --muted: #9aa5ba;
+      --accent: #73a7ff;
+      --good: #73e08f;
+      --bad: #ff6b6b;
+      --warn: #ffd36b;
+      --border: #394255;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    header {
+      height: 58px;
+      background: #0b0e14;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    header h1 {
+      margin: 0 12px 0 0;
+      font-size: 18px;
+      white-space: nowrap;
+    }
+
+    button,
+    input,
+    select {
+      background: var(--panel2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 7px 9px;
+      font-size: 13px;
+    }
+
+    button { cursor: pointer; }
+    button:hover { border-color: var(--accent); }
+    button.active {
+      background: var(--accent);
+      color: #08111f;
+      border-color: var(--accent);
+    }
+    button.danger:hover { border-color: var(--bad); color: var(--bad); }
+    label { color: var(--muted); font-size: 13px; }
+
+    main {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      height: calc(100vh - 58px);
+      overflow: hidden;
+    }
+
+    aside {
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      padding: 12px;
+      overflow-y: auto;
+    }
+
+    .section {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+      background: rgba(255,255,255,0.025);
+    }
+
+    .section h2 { margin: 0 0 8px; font-size: 15px; }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin: 8px 0;
+    }
+
+    input[type="number"] { width: 82px; }
+    input[type="range"] { width: 155px; }
+
+    .small {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .stat {
+      background: #10131b;
+      border-radius: 7px;
+      padding: 8px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      white-space: pre-wrap;
+      font-size: 12px;
+    }
+
+    #workspace {
+      display: grid;
+      grid-template-rows: 1fr 180px;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    #viewerWrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .canvasPanel {
+      display: grid;
+      grid-template-rows: 34px 1fr;
+      min-width: 0;
+      min-height: 0;
+      border-right: 1px solid var(--border);
+    }
+
+    .canvasTitle {
+      background: #151923;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+      padding: 6px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .canvasBox {
+      position: relative;
+      overflow: hidden;
+      background:
+        linear-gradient(45deg, #171a22 25%, transparent 25%),
+        linear-gradient(-45deg, #171a22 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #171a22 75%),
+        linear-gradient(-45deg, transparent 75%, #171a22 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+      cursor: crosshair;
+    }
+
+    canvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    #log {
+      background: #10131b;
+      border-top: 1px solid var(--border);
+      padding: 10px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    .good { color: var(--good); }
+    .bad { color: var(--bad); }
+    .warn { color: var(--warn); }
+  </style>
+</head>
+
+<body>
+<header>
+  <h1>WebP Region Repair</h1>
+
+  <label>
+    Image:
+    <input id="imageInput" type="file" accept="image/webp,image/png,image/jpeg" />
+  </label>
+
+  <button id="autoSortBtn">Auto Sort Complex</button>
+  <button id="improveTopBtn">Improve Current</button>
+  <button id="exportBtn">Export PNG</button>
+</header>
+
+<main>
+  <aside>
+    <div class="section">
+      <h2>Cut Settings</h2>
+      <div class="row">
+        <label>Columns</label>
+        <input id="colsInput" type="number" min="1" value="5" />
+        <label>Rows</label>
+        <input id="rowsInput" type="number" min="1" value="5" />
+      </div>
+      <div class="row">
+        <button id="applyGridBtn">Apply Grid</button>
+        <button id="resetBtn" class="danger">Reset</button>
+      </div>
+      <p class="small">
+        Default is 5 columns × 5 rows. Use the actual corruption grid. If the grid is wrong, sorting will be wrong no matter how clever the code gets.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2>Complex Sort Settings</h2>
+      <div class="row">
+        <label>Edge sample</label>
+        <input id="edgeSampleInput" type="number" min="1" value="4" />
+      </div>
+      <div class="row">
+        <label>Iterations</label>
+        <input id="iterationsInput" type="number" min="1" max="100" value="30" />
+      </div>
+      <div class="row">
+        <button id="improveBtn">Improve Current Layout</button>
+      </div>
+      <p class="small">
+        Sort uses seam profiles, interior strips, gradients, corners, detail/variance, reciprocal neighbor ranking, greedy placement, local swaps, and annealing.
+        Blank white chunks still suck because there is nothing there to match.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2>Edit Mode</h2>
+      <div class="row">
+        <button id="swapModeBtn" class="active">Swap Output Tiles</button>
+        <button id="assignModeBtn">Assign Source Tile</button>
+      </div>
+      <p class="small">
+        Swap: click two tiles on output. Assign: click destination on left, then source on right.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2>Map</h2>
+      <div class="row">
+        <button id="saveMapBtn">Save Map</button>
+      </div>
+      <div class="row">
+        <label>
+          Load Map:
+          <input id="loadMapInput" type="file" accept=".json,application/json" />
+        </label>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>View</h2>
+      <div class="row">
+        <label>Zoom</label>
+        <input id="zoomInput" type="range" min="0.1" max="20" step="0.1" value="1" />
+        <span id="zoomLabel">1.0×</span>
+      </div>
+      <div class="row">
+        <button id="fitBtn">Fit</button>
+        <button id="oneBtn">1:1</button>
+      </div>
+      <div class="row">
+        <label><input id="gridToggle" type="checkbox" checked /> Grid</label>
+        <label><input id="highlightToggle" type="checkbox" checked /> Highlight</label>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Selected</h2>
+      <div id="selectedInfo" class="stat">none</div>
+    </div>
+
+    <div class="section">
+      <h2>Image Info</h2>
+      <div id="imageInfo" class="stat">No image loaded.</div>
+    </div>
+  </aside>
+
+  <section id="workspace">
+    <div id="viewerWrap">
+      <div class="canvasPanel">
+        <div class="canvasTitle">
+          <span>Output / Repaired</span>
+          <span id="outputHover"></span>
+        </div>
+        <div id="outputBox" class="canvasBox">
+          <canvas id="outputCanvas"></canvas>
+          <canvas id="outputOverlay"></canvas>
+        </div>
+      </div>
+
+      <div class="canvasPanel">
+        <div class="canvasTitle">
+          <span>Source / Corrupted</span>
+          <span id="sourceHover"></span>
+        </div>
+        <div id="sourceBox" class="canvasBox">
+          <canvas id="sourceCanvas"></canvas>
+          <canvas id="sourceOverlay"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div id="log">Load an image.</div>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+const imageInput = document.getElementById("imageInput");
+const autoSortBtn = document.getElementById("autoSortBtn");
+const improveTopBtn = document.getElementById("improveTopBtn");
+const exportBtn = document.getElementById("exportBtn");
+
+const colsInput = document.getElementById("colsInput");
+const rowsInput = document.getElementById("rowsInput");
+const applyGridBtn = document.getElementById("applyGridBtn");
+const resetBtn = document.getElementById("resetBtn");
+
+const edgeSampleInput = document.getElementById("edgeSampleInput");
+const iterationsInput = document.getElementById("iterationsInput");
+const improveBtn = document.getElementById("improveBtn");
+
+const swapModeBtn = document.getElementById("swapModeBtn");
+const assignModeBtn = document.getElementById("assignModeBtn");
+
+const saveMapBtn = document.getElementById("saveMapBtn");
+const loadMapInput = document.getElementById("loadMapInput");
+
+const zoomInput = document.getElementById("zoomInput");
+const zoomLabel = document.getElementById("zoomLabel");
+const fitBtn = document.getElementById("fitBtn");
+const oneBtn = document.getElementById("oneBtn");
+
+const gridToggle = document.getElementById("gridToggle");
+const highlightToggle = document.getElementById("highlightToggle");
+
+const outputBox = document.getElementById("outputBox");
+const sourceBox = document.getElementById("sourceBox");
+
+const outputCanvas = document.getElementById("outputCanvas");
+const outputOverlay = document.getElementById("outputOverlay");
+const sourceCanvas = document.getElementById("sourceCanvas");
+const sourceOverlay = document.getElementById("sourceOverlay");
+
+const outputCtx = outputCanvas.getContext("2d", { willReadFrequently: true });
+const outputOverlayCtx = outputOverlay.getContext("2d");
+const sourceCtx = sourceCanvas.getContext("2d", { willReadFrequently: true });
+const sourceOverlayCtx = sourceOverlay.getContext("2d");
+
+const logBox = document.getElementById("log");
+const selectedInfo = document.getElementById("selectedInfo");
+const imageInfo = document.getElementById("imageInfo");
+const outputHover = document.getElementById("outputHover");
+const sourceHover = document.getElementById("sourceHover");
+
+let file = null;
+let img = null;
+
+let sourceBitmap = document.createElement("canvas");
+let sourceBitmapCtx = sourceBitmap.getContext("2d", { willReadFrequently: true });
+
+let width = 0;
+let height = 0;
+
+let cols = 5;
+let rows = 5;
+let tileW = 0;
+let tileH = 0;
+let total = 0;
+
+// mapping[destIndex] = sourceIndex
+let mapping = [];
+
+let zoom = 1;
+let panX = 0;
+let panY = 0;
+let isPanning = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+
+let mode = "swap";
+let selectedDest = null;
+let selectedSource = null;
+let firstSwap = null;
+
+let featureCache = [];
+let neighborCache = { right: [], left: [], down: [], up: [] };
+
+function log(msg) {
+  logBox.textContent += "\n" + msg;
+  logBox.scrollTop = logBox.scrollHeight;
+}
+
+function clearLog(msg) { logBox.textContent = msg; }
+function requireImage() {
+  if (!img) { log("ERROR: No image loaded."); return false; }
+  return true;
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function index(cx, cy) { return cy * cols + cx; }
+function xy(i) { return { x: i % cols, y: Math.floor(i / cols) }; }
+function validGridPos(x, y) { return x >= 0 && y >= 0 && x < cols && y < rows; }
+
+function sourceRect(sourceIndex) {
+  const p = xy(sourceIndex);
+  return { x: p.x * tileW, y: p.y * tileH, w: tileW, h: tileH };
+}
+
+function destRect(destIndex) {
+  const p = xy(destIndex);
+  return { x: p.x * tileW, y: p.y * tileH, w: tileW, h: tileH };
+}
+
+function tileBounds(tileIndex) {
+  const p = xy(tileIndex);
+  return {
+    x0: p.x * tileW,
+    y0: p.y * tileH,
+    x1: (p.x + 1) * tileW,
+    y1: (p.y + 1) * tileH
+  };
+}
+
+function getTileFromEvent(event, box) {
+  const rect = box.getBoundingClientRect();
+  const sx = event.clientX - rect.left;
+  const sy = event.clientY - rect.top;
+  const imgX = (sx - panX) / zoom;
+  const imgY = (sy - panY) / zoom;
+  const cx = Math.floor(imgX / tileW);
+  const cy = Math.floor(imgY / tileH);
+  if (!validGridPos(cx, cy)) return null;
+  return { x: cx, y: cy, index: index(cx, cy) };
+}
+
+async function loadImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => { URL.revokeObjectURL(url); resolve(image); };
+    image.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Failed to load image.")); };
+    image.src = url;
+  });
+}
+
+async function loadCurrentImage() {
+  if (!file) return;
+
+  img = await loadImageFile(file);
+  width = img.naturalWidth;
+  height = img.naturalHeight;
+
+  sourceBitmap.width = width;
+  sourceBitmap.height = height;
+  sourceBitmapCtx.clearRect(0, 0, width, height);
+  sourceBitmapCtx.drawImage(img, 0, 0);
+
+  for (const canvas of [sourceCanvas, sourceOverlay, outputCanvas, outputOverlay]) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+
+  sourceCtx.clearRect(0, 0, width, height);
+  sourceCtx.drawImage(sourceBitmap, 0, 0);
+
+  applyGrid();
+
+  clearLog(`Loaded: ${file.name}`);
+  log(`Size: ${width}x${height}`);
+  log(`Default grid: ${cols} columns × ${rows} rows`);
+}
+
+function applyGrid() {
+  if (!requireImage()) return;
+
+  cols = parseInt(colsInput.value, 10);
+  rows = parseInt(rowsInput.value, 10);
+
+  if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols < 1 || rows < 1) {
+    log("ERROR: columns and rows must be positive numbers.");
+    return;
+  }
+
+  tileW = width / cols;
+  tileH = height / rows;
+  total = cols * rows;
+
+  mapping = new Array(total);
+  for (let i = 0; i < total; i++) mapping[i] = i;
+
+  selectedDest = null;
+  selectedSource = null;
+  firstSwap = null;
+
+  buildEdgeCache();
+  rebuildOutput();
+  fitView();
+  updateTransform();
+  updateInfo();
+  updateSelected();
+
+  log(`Grid applied: ${cols} columns × ${rows} rows`);
+  log(`Region size: ${tileW.toFixed(2)}×${tileH.toFixed(2)} pixels`);
+}
+
+function updateInfo() {
+  if (!img) { imageInfo.textContent = "No image loaded."; return; }
+  imageInfo.textContent =
+`image: ${width}x${height}
+grid: ${cols}x${rows}
+pieces: ${total}
+piece size: ${tileW.toFixed(2)}x${tileH.toFixed(2)}`;
+}
+
+function updateSelected() {
+  const lines = [];
+  if (selectedDest !== null) {
+    const d = xy(selectedDest);
+    const s = mapping[selectedDest];
+    const sp = xy(s);
+    lines.push(`dest: #${selectedDest} (${d.x}, ${d.y})`);
+    lines.push(`src:  #${s} (${sp.x}, ${sp.y})`);
+  }
+  if (selectedSource !== null) {
+    const s = xy(selectedSource);
+    lines.push(`selected source: #${selectedSource} (${s.x}, ${s.y})`);
+  }
+  if (firstSwap !== null) {
+    const f = xy(firstSwap);
+    lines.push(`first swap: #${firstSwap} (${f.x}, ${f.y})`);
+  }
+  selectedInfo.textContent = lines.length ? lines.join("\n") : "none";
+}
+
+function rebuildOutput() {
+  if (!requireImage()) return;
+
+  outputCtx.clearRect(0, 0, width, height);
+  outputCtx.imageSmoothingEnabled = false;
+
+  for (let dest = 0; dest < total; dest++) {
+    const src = mapping[dest];
+    const sr = sourceRect(src);
+    const dr = destRect(dest);
+    outputCtx.drawImage(sourceBitmap, sr.x, sr.y, sr.w, sr.h, dr.x, dr.y, dr.w, dr.h);
+  }
+
+  drawOverlays();
+}
+
+function drawOverlays() {
+  drawOverlay(outputOverlayCtx, "output");
+  drawOverlay(sourceOverlayCtx, "source");
+}
+
+function drawOverlay(ctx, type) {
+  if (!img) return;
+  ctx.clearRect(0, 0, width, height);
+
+  if (gridToggle.checked) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(115, 167, 255, 0.45)";
+    ctx.lineWidth = Math.max(1 / zoom, 0.5);
+    for (let x = 0; x <= cols; x++) {
+      const px = x * tileW;
+      ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, height); ctx.stroke();
+    }
+    for (let y = 0; y <= rows; y++) {
+      const py = y * tileH;
+      ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(width, py); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  if (!highlightToggle.checked) return;
+
+  ctx.save();
+  ctx.lineWidth = Math.max(3 / zoom, 1);
+  if (type === "output") {
+    if (selectedDest !== null) drawTileBox(ctx, selectedDest, "rgba(115,224,143,0.95)");
+    if (firstSwap !== null) drawTileBox(ctx, firstSwap, "rgba(255,211,107,0.95)");
+  }
+  if (type === "source") {
+    if (selectedSource !== null) drawTileBox(ctx, selectedSource, "rgba(255,107,107,0.95)");
+    if (selectedDest !== null) drawTileBox(ctx, mapping[selectedDest], "rgba(115,224,143,0.95)");
+  }
+  ctx.restore();
+}
+
+function drawTileBox(ctx, i, color) {
+  const r = destRect(i);
+  ctx.strokeStyle = color;
+  ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+}
+
+function fitView() {
+  if (!img) return;
+  const a = outputBox.getBoundingClientRect();
+  const b = sourceBox.getBoundingClientRect();
+  const usableW = Math.min(a.width, b.width);
+  const usableH = Math.min(a.height, b.height);
+  zoom = Math.min(usableW / width, usableH / height) * 0.95;
+  if (!Number.isFinite(zoom) || zoom <= 0) zoom = 1;
+  panX = (usableW - width * zoom) / 2;
+  panY = (usableH - height * zoom) / 2;
+  zoomInput.value = String(Math.max(0.1, Math.min(20, zoom)));
+  zoomLabel.textContent = `${zoom.toFixed(1)}×`;
+}
+
+function updateTransform() {
+  for (const canvas of [outputCanvas, outputOverlay, sourceCanvas, sourceOverlay]) {
+    canvas.style.transformOrigin = "0 0";
+    canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+  }
+  drawOverlays();
+}
+
+function setZoom(newZoom, centerX = null, centerY = null, box = null) {
+  const oldZoom = zoom;
+  zoom = Math.max(0.1, Math.min(20, newZoom));
+  if (centerX !== null && centerY !== null && box !== null) {
+    const rect = box.getBoundingClientRect();
+    const sx = centerX - rect.left;
+    const sy = centerY - rect.top;
+    const ix = (sx - panX) / oldZoom;
+    const iy = (sy - panY) / oldZoom;
+    panX = sx - ix * zoom;
+    panY = sy - iy * zoom;
+  }
+  zoomInput.value = String(zoom);
+  zoomLabel.textContent = `${zoom.toFixed(1)}×`;
+  updateTransform();
+}
+
+function handleWheel(event) {
+  if (!img) return;
+  event.preventDefault();
+  const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15;
+  setZoom(zoom * factor, event.clientX, event.clientY, event.currentTarget);
+}
+
+function beginPan(event) {
+  if (event.button !== 1 && !event.shiftKey) return;
+  isPanning = true;
+  lastMouseX = event.clientX;
+  lastMouseY = event.clientY;
+  event.preventDefault();
+}
+
+function movePan(event) {
+  if (!isPanning) return;
+  const dx = event.clientX - lastMouseX;
+  const dy = event.clientY - lastMouseY;
+  lastMouseX = event.clientX;
+  lastMouseY = event.clientY;
+  panX += dx;
+  panY += dy;
+  updateTransform();
+}
+
+function endPan() { isPanning = false; }
+
+function setMode(newMode) {
+  mode = newMode;
+  swapModeBtn.classList.toggle("active", mode === "swap");
+  assignModeBtn.classList.toggle("active", mode === "assign");
+  firstSwap = null;
+  selectedDest = null;
+  selectedSource = null;
+  updateSelected();
+  drawOverlays();
+  log(`Mode: ${mode}`);
+}
+
+function handleOutputClick(event) {
+  if (!requireImage()) return;
+  const hit = getTileFromEvent(event, outputBox);
+  if (!hit) return;
+
+  selectedDest = hit.index;
+
+  if (mode === "swap") {
+    if (firstSwap === null) firstSwap = hit.index;
+    else if (firstSwap === hit.index) firstSwap = null;
+    else {
+      const tmp = mapping[firstSwap];
+      mapping[firstSwap] = mapping[hit.index];
+      mapping[hit.index] = tmp;
+      log(`Swapped output #${firstSwap} and #${hit.index}.`);
+      firstSwap = null;
+      rebuildOutput();
+    }
+  }
+
+  if (mode === "assign" && selectedSource !== null) {
+    mapping[selectedDest] = selectedSource;
+    log(`Assigned source #${selectedSource} to output #${selectedDest}.`);
+    rebuildOutput();
+  }
+
+  updateSelected();
+  drawOverlays();
+}
+
+function handleSourceClick(event) {
+  if (!requireImage()) return;
+  const hit = getTileFromEvent(event, sourceBox);
+  if (!hit) return;
+
+  selectedSource = hit.index;
+  if (mode === "assign" && selectedDest !== null) {
+    mapping[selectedDest] = selectedSource;
+    log(`Assigned source #${selectedSource} to output #${selectedDest}.`);
+    rebuildOutput();
+  }
+  updateSelected();
+  drawOverlays();
+}
+
+function handleHover(event, box, label, type) {
+  if (!img) return;
+  const hit = getTileFromEvent(event, box);
+  if (!hit) { label.textContent = ""; return; }
+  if (type === "output") label.textContent = `output #${hit.index} -> source #${mapping[hit.index]}`;
+  else label.textContent = `source #${hit.index}`;
+}
+
+// -----------------------------
+// Complex visual matching solver
+// -----------------------------
+
+function getPixelFromData(data, x, y) {
+  x = clamp(Math.floor(x), 0, width - 1);
+  y = clamp(Math.floor(y), 0, height - 1);
+  const i = (y * width + x) * 4;
+  return [data[i], data[i + 1], data[i + 2], data[i + 3]];
+}
+
+function colorDistance(a, b) {
+  const dr = a[0] - b[0];
+  const dg = a[1] - b[1];
+  const db = a[2] - b[2];
+  const da = a[3] - b[3];
+  return dr * dr + dg * dg + db * db + da * da * 0.15;
+}
+
+function colorAdd(acc, c) {
+  acc[0] += c[0]; acc[1] += c[1]; acc[2] += c[2]; acc[3] += c[3];
+}
+
+function colorDiv(acc, n) { return [acc[0] / n, acc[1] / n, acc[2] / n, acc[3] / n]; }
+
+function sampleEdgeProfile(data, tileIndex, side, samples, inset) {
+  const b = tileBounds(tileIndex);
+  const result = [];
+  const usableW = Math.max(1, b.x1 - b.x0 - 1);
+  const usableH = Math.max(1, b.y1 - b.y0 - 1);
+
+  for (let i = 0; i < samples; i++) {
+    const t = samples <= 1 ? 0.5 : i / (samples - 1);
+    let x = 0, y = 0;
+    if (side === "left") { x = b.x0 + inset; y = b.y0 + t * usableH; }
+    else if (side === "right") { x = b.x1 - 1 - inset; y = b.y0 + t * usableH; }
+    else if (side === "top") { x = b.x0 + t * usableW; y = b.y0 + inset; }
+    else if (side === "bottom") { x = b.x0 + t * usableW; y = b.y1 - 1 - inset; }
+    result.push(getPixelFromData(data, x, y));
+  }
+  return result;
+}
+
+function sampleStripProfile(data, tileIndex, side, samples, stripDepth) {
+  const b = tileBounds(tileIndex);
+  const result = [];
+  const usableW = Math.max(1, b.x1 - b.x0 - 1);
+  const usableH = Math.max(1, b.y1 - b.y0 - 1);
+
+  for (let i = 0; i < samples; i++) {
+    const t = samples <= 1 ? 0.5 : i / (samples - 1);
+    const acc = [0, 0, 0, 0];
+    let count = 0;
+    for (let d = 0; d < stripDepth; d++) {
+      let x = 0, y = 0;
+      if (side === "left") { x = b.x0 + d; y = b.y0 + t * usableH; }
+      else if (side === "right") { x = b.x1 - 1 - d; y = b.y0 + t * usableH; }
+      else if (side === "top") { x = b.x0 + t * usableW; y = b.y0 + d; }
+      else if (side === "bottom") { x = b.x0 + t * usableW; y = b.y1 - 1 - d; }
+      colorAdd(acc, getPixelFromData(data, x, y));
+      count++;
+    }
+    result.push(colorDiv(acc, count));
+  }
+  return result;
+}
+
+function sampleCorners(data, tileIndex) {
+  const b = tileBounds(tileIndex);
+  return {
+    tl: getPixelFromData(data, b.x0, b.y0),
+    tr: getPixelFromData(data, b.x1 - 1, b.y0),
+    bl: getPixelFromData(data, b.x0, b.y1 - 1),
+    br: getPixelFromData(data, b.x1 - 1, b.y1 - 1)
+  };
+}
+
+function profileDistance(a, b) {
+  const n = Math.min(a.length, b.length);
+  let total = 0;
+  for (let i = 0; i < n; i++) total += colorDistance(a[i], b[i]);
+  return total / Math.max(1, n);
+}
+
+function tileMeanAndVariance(data, tileIndex) {
+  const b = tileBounds(tileIndex);
+  const stepX = Math.max(1, Math.floor((b.x1 - b.x0) / 16));
+  const stepY = Math.max(1, Math.floor((b.y1 - b.y0) / 16));
+  let count = 0;
+  const mean = [0, 0, 0, 0];
+
+  for (let y = b.y0; y < b.y1; y += stepY) {
+    for (let x = b.x0; x < b.x1; x += stepX) {
+      colorAdd(mean, getPixelFromData(data, x, y));
+      count++;
+    }
+  }
+
+  const avg = colorDiv(mean, Math.max(1, count));
+  let variance = 0;
+
+  for (let y = b.y0; y < b.y1; y += stepY) {
+    for (let x = b.x0; x < b.x1; x += stepX) {
+      variance += colorDistance(getPixelFromData(data, x, y), avg);
+    }
+  }
+
+  return { mean: avg, variance: variance / Math.max(1, count) };
+}
+
+function sideOpposite(side) {
+  if (side === "left") return "right";
+  if (side === "right") return "left";
+  if (side === "top") return "bottom";
+  if (side === "bottom") return "top";
+  return "";
+}
+
+function buildEdgeCache() {
+  if (!img) return;
+
+  const data = sourceBitmapCtx.getImageData(0, 0, width, height).data;
+  const edgeSample = parseInt(edgeSampleInput.value, 10) || 4;
+  const profileSamples = Math.max(32, Math.min(128, Math.floor(Math.max(tileW, tileH))));
+  const stripDepth = Math.max(1, Math.min(10, edgeSample));
+
+  featureCache = new Array(total);
+
+  for (let i = 0; i < total; i++) {
+    const stats = tileMeanAndVariance(data, i);
+    featureCache[i] = {
+      mean: stats.mean,
+      variance: stats.variance,
+      corners: sampleCorners(data, i),
+      edge: {
+        left: sampleEdgeProfile(data, i, "left", profileSamples, 0),
+        right: sampleEdgeProfile(data, i, "right", profileSamples, 0),
+        top: sampleEdgeProfile(data, i, "top", profileSamples, 0),
+        bottom: sampleEdgeProfile(data, i, "bottom", profileSamples, 0)
+      },
+      inner: {
+        left: sampleStripProfile(data, i, "left", profileSamples, stripDepth),
+        right: sampleStripProfile(data, i, "right", profileSamples, stripDepth),
+        top: sampleStripProfile(data, i, "top", profileSamples, stripDepth),
+        bottom: sampleStripProfile(data, i, "bottom", profileSamples, stripDepth)
+      },
+      nearInner: {
+        left: sampleEdgeProfile(data, i, "left", profileSamples, stripDepth),
+        right: sampleEdgeProfile(data, i, "right", profileSamples, stripDepth),
+        top: sampleEdgeProfile(data, i, "top", profileSamples, stripDepth),
+        bottom: sampleEdgeProfile(data, i, "bottom", profileSamples, stripDepth)
+      }
+    };
+  }
+
+  buildNeighborCache();
+}
+
+function seamCornerCost(a, b, direction) {
+  const ca = featureCache[a].corners;
+  const cb = featureCache[b].corners;
+  if (direction === "right") return (colorDistance(ca.tr, cb.tl) + colorDistance(ca.br, cb.bl)) * 0.5;
+  if (direction === "left") return (colorDistance(ca.tl, cb.tr) + colorDistance(ca.bl, cb.br)) * 0.5;
+  if (direction === "down") return (colorDistance(ca.bl, cb.tl) + colorDistance(ca.br, cb.tr)) * 0.5;
+  if (direction === "up") return (colorDistance(ca.tl, cb.bl) + colorDistance(ca.tr, cb.br)) * 0.5;
+  return 0;
+}
+
+function detailReliability(tileIndex) {
+  const v = featureCache[tileIndex].variance;
+  return clamp(v / 2500, 0.08, 1.0);
+}
+
+function seamCost(a, b, direction) {
+  const opposite = sideOpposite(direction);
+  const fa = featureCache[a];
+  const fb = featureCache[b];
+
+  const directEdge = profileDistance(fa.edge[direction], fb.edge[opposite]);
+  const innerStrip = profileDistance(fa.inner[direction], fb.inner[opposite]);
+  const gradient =
+    profileDistance(fa.nearInner[direction], fb.edge[opposite]) +
+    profileDistance(fa.edge[direction], fb.nearInner[opposite]);
+  const corner = seamCornerCost(a, b, direction);
+  const meanPenalty = colorDistance(fa.mean, fb.mean) * 0.03;
+  const reliability = Math.sqrt(detailReliability(a) * detailReliability(b));
+  const ambiguityPenalty = (1.0 - reliability) * 3500;
+
+  return directEdge * 1.0 + innerStrip * 0.65 + gradient * 0.5 + corner * 0.45 + meanPenalty + ambiguityPenalty;
+}
+
+function buildNeighborCache() {
+  neighborCache = { right: new Array(total), left: new Array(total), down: new Array(total), up: new Array(total) };
+  const directions = ["right", "left", "down", "up"];
+
+  for (const dir of directions) {
+    for (let a = 0; a < total; a++) {
+      const list = [];
+      for (let b = 0; b < total; b++) {
+        if (a !== b) list.push({ tile: b, cost: seamCost(a, b, dir) });
+      }
+      list.sort((x, y) => x.cost - y.cost);
+      neighborCache[dir][a] = list;
+    }
+  }
+}
+
+function reciprocalNeighborBonus(a, b, direction) {
+  const opposite = sideOpposite(direction);
+  const forward = neighborCache[direction][a];
+  const backward = neighborCache[opposite][b];
+  let rankA = 9999;
+  let rankB = 9999;
+
+  for (let i = 0; i < Math.min(30, forward.length); i++) {
+    if (forward[i].tile === b) { rankA = i; break; }
+  }
+  for (let i = 0; i < Math.min(30, backward.length); i++) {
+    if (backward[i].tile === a) { rankB = i; break; }
+  }
+
+  if (rankA < 10 && rankB < 10) return -1200 / (1 + rankA + rankB);
+  return 0;
+}
+
+function pairCost(a, b, direction) {
+  return seamCost(a, b, direction) + reciprocalNeighborBonus(a, b, direction);
+}
+
+function placementCostForCandidate(map, destIndex, candidate) {
+  const p = xy(destIndex);
+  let cost = 0;
+  let constraints = 0;
+
+  if (p.x > 0) {
+    const left = map[index(p.x - 1, p.y)];
+    if (left !== null && left !== undefined) { cost += pairCost(left, candidate, "right"); constraints++; }
+  }
+  if (p.y > 0) {
+    const up = map[index(p.x, p.y - 1)];
+    if (up !== null && up !== undefined) { cost += pairCost(up, candidate, "down"); constraints++; }
+  }
+  if (p.x + 1 < cols) {
+    const right = map[index(p.x + 1, p.y)];
+    if (right !== null && right !== undefined) { cost += pairCost(candidate, right, "right"); constraints++; }
+  }
+  if (p.y + 1 < rows) {
+    const down = map[index(p.x, p.y + 1)];
+    if (down !== null && down !== undefined) { cost += pairCost(candidate, down, "down"); constraints++; }
+  }
+
+  if (constraints === 0) cost -= featureCache[candidate].variance * 0.2;
+  return cost / Math.max(1, constraints);
+}
+
+function chooseBestCandidate(map, destIndex, unused) {
+  let best = null;
+  let bestCost = Infinity;
+  const p = xy(destIndex);
+  const candidateScores = new Map();
+
+  function addCandidate(tile, bonus) {
+    if (!unused.has(tile)) return;
+    candidateScores.set(tile, (candidateScores.get(tile) || 0) + bonus);
+  }
+
+  if (p.x > 0) {
+    const left = map[index(p.x - 1, p.y)];
+    if (left !== null && left !== undefined) {
+      for (let i = 0; i < Math.min(20, neighborCache.right[left].length); i++) addCandidate(neighborCache.right[left][i].tile, i);
+    }
+  }
+
+  if (p.y > 0) {
+    const up = map[index(p.x, p.y - 1)];
+    if (up !== null && up !== undefined) {
+      for (let i = 0; i < Math.min(20, neighborCache.down[up].length); i++) addCandidate(neighborCache.down[up][i].tile, i);
+    }
+  }
+
+  let candidates = [...candidateScores.keys()];
+  if (candidates.length === 0) candidates = [...unused];
+
+  const detailed = [...unused]
+    .sort((a, b) => featureCache[b].variance - featureCache[a].variance)
+    .slice(0, Math.min(30, unused.size));
+
+  for (const d of detailed) if (!candidates.includes(d)) candidates.push(d);
+
+  for (const candidate of candidates) {
+    const baseCost = placementCostForCandidate(map, destIndex, candidate);
+    const neighborRankPenalty = candidateScores.has(candidate) ? candidateScores.get(candidate) * 25 : 600;
+    const cost = baseCost + neighborRankPenalty;
+    if (cost < bestCost) { bestCost = cost; best = candidate; }
+  }
+
+  return best;
+}
+
+function findStrongAnchorTile() {
+  let best = 0;
+  let bestScore = -Infinity;
+  for (let i = 0; i < total; i++) {
+    const f = featureCache[i];
+    const edgeContrast = profileDistance(f.edge.left, f.edge.right) + profileDistance(f.edge.top, f.edge.bottom);
+    const score = f.variance * 1.25 + edgeContrast * 0.15;
+    if (score > bestScore) { bestScore = score; best = i; }
+  }
+  return best;
+}
+
+function generatePlacementOrder() {
+  const order = [];
+  for (let y = 0; y < rows; y++) {
+    if (y % 2 === 0) for (let x = 0; x < cols; x++) order.push(index(x, y));
+    else for (let x = cols - 1; x >= 0; x--) order.push(index(x, y));
+  }
+  return order;
+}
+
+function autoSortByEdges() {
+  if (!requireImage()) return;
+
+  buildEdgeCache();
+  log("Complex auto-sort started. Using profiles, strips, gradients, corners, variance, reciprocal neighbors, greedy placement, swaps, and annealing.");
+
+  const newMap = new Array(total).fill(null);
+  const unused = new Set();
+  for (let i = 0; i < total; i++) unused.add(i);
+
+  const order = generatePlacementOrder();
+  const anchorDest = order[0];
+  const anchorTile = findStrongAnchorTile();
+  newMap[anchorDest] = anchorTile;
+  unused.delete(anchorTile);
+
+  for (let oi = 1; oi < order.length; oi++) {
+    const dest = order[oi];
+    const best = chooseBestCandidate(newMap, dest, unused);
+    const chosen = (best === null || best === undefined) ? unused.values().next().value : best;
+    newMap[dest] = chosen;
+    unused.delete(chosen);
+  }
+
+  mapping = newMap;
+  improveLayout(false);
+  annealLayout(false);
+  rebuildOutput();
+  updateSelected();
+  log(`Complex auto-sort complete. Average seam cost: ${layoutCost(mapping).toFixed(2)}. Manual cleanup may still be needed.`);
+}
+
+function layoutCost(map) {
+  let cost = 0;
+  let seams = 0;
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const here = map[index(x, y)];
+      if (x + 1 < cols) { cost += pairCost(here, map[index(x + 1, y)], "right"); seams++; }
+      if (y + 1 < rows) { cost += pairCost(here, map[index(x, y + 1)], "down"); seams++; }
+    }
+  }
+  return cost / Math.max(1, seams);
+}
+
+function localPlacementCost(map, destIndex) {
+  const p = xy(destIndex);
+  const here = map[destIndex];
+  let cost = 0;
+  let count = 0;
+
+  if (p.x > 0) { cost += pairCost(map[index(p.x - 1, p.y)], here, "right"); count++; }
+  if (p.x + 1 < cols) { cost += pairCost(here, map[index(p.x + 1, p.y)], "right"); count++; }
+  if (p.y > 0) { cost += pairCost(map[index(p.x, p.y - 1)], here, "down"); count++; }
+  if (p.y + 1 < rows) { cost += pairCost(here, map[index(p.x, p.y + 1)], "down"); count++; }
+
+  return cost / Math.max(1, count);
+}
+
+function affectedNeighborhood(a, b) {
+  const affected = new Set();
+  function add(i) {
+    const p = xy(i);
+    affected.add(i);
+    if (p.x > 0) affected.add(index(p.x - 1, p.y));
+    if (p.x + 1 < cols) affected.add(index(p.x + 1, p.y));
+    if (p.y > 0) affected.add(index(p.x, p.y - 1));
+    if (p.y + 1 < rows) affected.add(index(p.x, p.y + 1));
+  }
+  add(a); add(b);
+  return affected;
+}
+
+function swapCostDelta(map, a, b) {
+  if (a === b) return 0;
+  const affected = affectedNeighborhood(a, b);
+  let before = 0;
+  for (const i of affected) before += localPlacementCost(map, i);
+
+  const tmp = map[a];
+  map[a] = map[b];
+  map[b] = tmp;
+
+  let after = 0;
+  for (const i of affected) after += localPlacementCost(map, i);
+
+  map[b] = map[a];
+  map[a] = tmp;
+
+  return after - before;
+}
+
+function improveLayout(shouldRebuild = true) {
+  if (!requireImage()) return;
+  buildEdgeCache();
+
+  const iterations = parseInt(iterationsInput.value, 10) || 30;
+  const maxIters = Math.max(1, Math.min(100, iterations));
+  let accepted = 0;
+
+  for (let iter = 0; iter < maxIters; iter++) {
+    let changed = 0;
+    for (let a = 0; a < total; a++) {
+      let bestB = -1;
+      let bestDelta = 0;
+      const candidates = new Set();
+      const p = xy(a);
+
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const nx = p.x + dx, ny = p.y + dy;
+          if (validGridPos(nx, ny)) candidates.add(index(nx, ny));
+        }
+      }
+
+      const randomTries = Math.min(total, 200);
+      for (let t = 0; t < randomTries; t++) candidates.add(Math.floor(Math.random() * total));
+
+      for (const b of candidates) {
+        if (a === b) continue;
+        const delta = swapCostDelta(mapping, a, b);
+        if (delta < bestDelta) { bestDelta = delta; bestB = b; }
+      }
+
+      if (bestB !== -1) {
+        const tmp = mapping[a];
+        mapping[a] = mapping[bestB];
+        mapping[bestB] = tmp;
+        changed++;
+        accepted++;
+      }
+    }
+    if (changed === 0) break;
+  }
+
+  if (shouldRebuild) {
+    rebuildOutput();
+    log(`Improved layout. Accepted swaps: ${accepted}. Average seam cost: ${layoutCost(mapping).toFixed(2)}`);
+  }
+}
+
+function annealLayout(shouldRebuild = true) {
+  if (!requireImage()) return;
+
+  const iterations = parseInt(iterationsInput.value, 10) || 30;
+  const steps = Math.max(1500, total * iterations * 40);
+  let temperature = 2200;
+  let accepted = 0;
+
+  for (let step = 0; step < steps; step++) {
+    const a = Math.floor(Math.random() * total);
+    const b = Math.floor(Math.random() * total);
+    if (a === b) continue;
+
+    const delta = swapCostDelta(mapping, a, b);
+    const accept = delta < 0 || Math.random() < Math.exp(-delta / Math.max(1, temperature));
+
+    if (accept) {
+      const tmp = mapping[a];
+      mapping[a] = mapping[b];
+      mapping[b] = tmp;
+      accepted++;
+    }
+
+    temperature *= 0.9995;
+    if (temperature < 20) temperature = 20;
+  }
+
+  improveLayout(false);
+
+  if (shouldRebuild) {
+    rebuildOutput();
+    log(`Annealed layout. Accepted moves: ${accepted}. Average seam cost: ${layoutCost(mapping).toFixed(2)}`);
+  }
+}
+
+function saveMap() {
+  if (!requireImage()) return;
+  const data = {
+    tool: "webp_region_repair",
+    version: 4,
+    width,
+    height,
+    cols,
+    rows,
+    mappingType: "destIndex_to_sourceIndex",
+    mapping
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `region_map_${width}x${height}_${cols}x${rows}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  log("Saved map.");
+}
+
+async function loadMap(file) {
+  if (!requireImage()) return;
+  let data;
+  try { data = JSON.parse(await file.text()); }
+  catch { log("ERROR: could not parse map JSON."); return; }
+
+  if (data.width !== width || data.height !== height) {
+    log("ERROR: map image size does not match current image.");
+    return;
+  }
+
+  if (data.cols !== cols || data.rows !== rows) {
+    colsInput.value = data.cols;
+    rowsInput.value = data.rows;
+    cols = data.cols;
+    rows = data.rows;
+    tileW = width / cols;
+    tileH = height / rows;
+    total = cols * rows;
+  }
+
+  if (!Array.isArray(data.mapping) || data.mapping.length !== total) {
+    log("ERROR: invalid map.");
+    return;
+  }
+
+  mapping = data.mapping.slice();
+  buildEdgeCache();
+  rebuildOutput();
+  updateInfo();
+  updateSelected();
+  log(`Loaded map: ${file.name}`);
+}
+
+function exportPng() {
+  if (!requireImage()) return;
+  rebuildOutput();
+  outputCanvas.toBlob(blob => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = file ? file.name.replace(/\.[^.]+$/, "") + "_fixed.png" : "fixed.png";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }, "image/png");
+  log("Exported PNG.");
+}
+
+// -----------------------------
+// Events
+// -----------------------------
+
+imageInput.addEventListener("change", async () => {
+  file = imageInput.files[0] || null;
+  if (file) await loadCurrentImage();
+});
+
+applyGridBtn.addEventListener("click", applyGrid);
+
+resetBtn.addEventListener("click", () => {
+  if (!requireImage()) return;
+  for (let i = 0; i < total; i++) mapping[i] = i;
+  rebuildOutput();
+  log("Reset layout.");
+});
+
+autoSortBtn.addEventListener("click", autoSortByEdges);
+
+function improveAndAnneal() {
+  improveLayout(false);
+  annealLayout(true);
+}
+
+improveBtn.addEventListener("click", improveAndAnneal);
+improveTopBtn.addEventListener("click", improveAndAnneal);
+
+swapModeBtn.addEventListener("click", () => setMode("swap"));
+assignModeBtn.addEventListener("click", () => setMode("assign"));
+
+saveMapBtn.addEventListener("click", saveMap);
+loadMapInput.addEventListener("change", async () => {
+  const f = loadMapInput.files[0];
+  if (f) await loadMap(f);
+});
+
+exportBtn.addEventListener("click", exportPng);
+
+fitBtn.addEventListener("click", () => { fitView(); updateTransform(); });
+oneBtn.addEventListener("click", () => {
+  zoom = 1;
+  panX = 20;
+  panY = 20;
+  zoomInput.value = "1";
+  zoomLabel.textContent = "1.0×";
+  updateTransform();
+});
+
+zoomInput.addEventListener("input", () => {
+  zoom = parseFloat(zoomInput.value);
+  zoomLabel.textContent = `${zoom.toFixed(1)}×`;
+  updateTransform();
+});
+
+gridToggle.addEventListener("change", drawOverlays);
+highlightToggle.addEventListener("change", drawOverlays);
+
+outputBox.addEventListener("click", handleOutputClick);
+sourceBox.addEventListener("click", handleSourceClick);
+outputBox.addEventListener("mousemove", e => handleHover(e, outputBox, outputHover, "output"));
+sourceBox.addEventListener("mousemove", e => handleHover(e, sourceBox, sourceHover, "source"));
+
+for (const box of [outputBox, sourceBox]) {
+  box.addEventListener("wheel", handleWheel, { passive: false });
+  box.addEventListener("mousedown", beginPan);
+}
+
+window.addEventListener("mousemove", movePan);
+window.addEventListener("mouseup", endPan);
+
+window.addEventListener("keydown", event => {
+  if (!img) return;
+  if (event.key === "Escape") {
+    selectedDest = null;
+    selectedSource = null;
+    firstSwap = null;
+    updateSelected();
+    drawOverlays();
+  }
+  if (event.key === "1") setMode("swap");
+  if (event.key === "2") setMode("assign");
+  if (event.key.toLowerCase() === "f") { fitView(); updateTransform(); }
+});
+
+clearLog(`Load an image.
+
+Defaults:
+- Columns: 5
+- Rows: 5
+- Edge sample: 4
+- Iterations: 30
+
+Controls:
+- Mouse wheel: zoom
+- Shift + drag or middle mouse: pan
+- 1: swap mode
+- 2: assign source mode
+- F: fit
+- Esc: clear selection
+
+Workflow:
+1. Load corrupted image.
+2. Keep 5×5 or set the real columns/rows.
+3. Click Apply Grid if changed.
+4. Click Auto Sort Complex.
+5. Use Improve Current if needed.
+6. Manually fix bad chunks.
+7. Save Map or Export PNG.`);
+</script>
+</body>
+</html>

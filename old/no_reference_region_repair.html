@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>No-Reference WebP Region Repair</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --panel: #191f2b;
+      --panel2: #242c3b;
+      --panel3: #10141d;
+      --text: #e9edf5;
+      --muted: #9aa6bc;
+      --accent: #77aaff;
+      --good: #79df8d;
+      --bad: #ff7070;
+      --warn: #ffd36a;
+      --border: #39465c;
+      --cyan: #77f0ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    header {
+      height: 60px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      background: #090c12;
+      border-bottom: 1px solid var(--border);
+    }
+
+    header h1 {
+      font-size: 18px;
+      margin: 0 10px 0 0;
+      white-space: nowrap;
+    }
+
+    button, input, select {
+      background: var(--panel2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 7px 9px;
+      font-size: 13px;
+    }
+
+    button { cursor: pointer; }
+    button:hover { border-color: var(--accent); }
+    button.active { background: var(--accent); color: #06111f; border-color: var(--accent); }
+    button.danger:hover { border-color: var(--bad); color: var(--bad); }
+    button.good:hover { border-color: var(--good); color: var(--good); }
+
+    label { color: var(--muted); font-size: 13px; }
+    input[type="number"] { width: 82px; }
+    input[type="range"] { width: 150px; }
+
+    main {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      height: calc(100vh - 60px);
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    aside {
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      padding: 12px;
+      overflow-y: auto;
+    }
+
+    .section {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+      background: rgba(255,255,255,0.025);
+    }
+
+    .section h2 {
+      font-size: 15px;
+      margin: 0 0 8px;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 8px 0;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.38;
+    }
+
+    .stat {
+      background: var(--panel3);
+      border-radius: 7px;
+      padding: 8px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: pre-wrap;
+      font-size: 12px;
+    }
+
+    #workspace {
+      display: grid;
+      grid-template-rows: 1fr 185px;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    #viewerWrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .canvasPanel {
+      display: grid;
+      grid-template-rows: 36px 1fr;
+      min-width: 0;
+      min-height: 0;
+      border-right: 1px solid var(--border);
+    }
+
+    .canvasTitle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #151a25;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+      padding: 7px 10px;
+    }
+
+    .canvasBox {
+      position: relative;
+      overflow: hidden;
+      background:
+        linear-gradient(45deg, #171b25 25%, transparent 25%),
+        linear-gradient(-45deg, #171b25 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #171b25 75%),
+        linear-gradient(-45deg, transparent 75%, #171b25 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+      cursor: crosshair;
+    }
+
+    canvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    #log {
+      background: #0e121a;
+      border-top: 1px solid var(--border);
+      padding: 10px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 3px 7px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 12px;
+      background: #10141d;
+    }
+
+    .goodText { color: var(--good); }
+    .badText { color: var(--bad); }
+    .warnText { color: var(--warn); }
+  </style>
+</head>
+<body>
+<header>
+  <h1>No-Reference Region Repair</h1>
+  <label>Image: <input id="imageInput" type="file" accept="image/webp,image/png,image/jpeg" /></label>
+  <button id="solveBtn">Build Editable Draft</button>
+  <button id="refineBtn">Refine Draft</button>
+  <button id="exportBtn">Export PNG</button>
+</header>
+
+<main>
+  <aside>
+    <div class="section">
+      <h2>Cut Settings</h2>
+      <div class="row">
+        <label>Columns</label>
+        <input id="colsInput" type="number" min="1" value="5" />
+        <label>Rows</label>
+        <input id="rowsInput" type="number" min="1" value="5" />
+      </div>
+      <div class="row">
+        <button id="applyGridBtn">Apply Grid</button>
+        <button id="resetBtn" class="danger">Reset Identity</button>
+      </div>
+      <p class="small">Default is <b>5 columns × 5 rows</b>. Use the real number of shuffled pieces if you know it. Wrong grid = garbage output, no algorithm can psychic its way out of that.</p>
+    </div>
+
+    <div class="section">
+      <h2>No-Reference Solver</h2>
+      <div class="row">
+        <label>Beam width</label>
+        <input id="beamInput" type="number" min="1" max="80" value="24" />
+      </div>
+      <div class="row">
+        <label>Neighbor candidates</label>
+        <input id="neighborInput" type="number" min="4" max="80" value="24" />
+      </div>
+      <div class="row">
+        <label>Edge depth</label>
+        <input id="edgeDepthInput" type="number" min="1" max="20" value="5" />
+      </div>
+      <div class="row">
+        <label>Refine rounds</label>
+        <input id="roundsInput" type="number" min="1" max="200" value="35" />
+      </div>
+      <div class="row">
+        <label><input id="blankLastToggle" type="checkbox" checked /> place blank pieces last</label>
+      </div>
+      <div class="row">
+        <label><input id="lockToggle" type="checkbox" /> click output tiles to lock/unlock</label>
+      </div>
+      <p class="small">The draft solver builds its own fake reference by clustering strong matches first, anchoring detailed pieces, then filling weak/blank pieces last. You can edit the result manually.</p>
+    </div>
+
+    <div class="section">
+      <h2>Edit Mode</h2>
+      <div class="row">
+        <button id="swapModeBtn" class="active">Swap Output Tiles</button>
+        <button id="assignModeBtn">Assign Source Tile</button>
+      </div>
+      <p class="small"><b>Swap:</b> click two output tiles. <br><b>Assign:</b> click destination on output, then source tile on the right.</p>
+    </div>
+
+    <div class="section">
+      <h2>Map</h2>
+      <div class="row">
+        <button id="saveMapBtn">Save Map</button>
+        <label>Load Map: <input id="loadMapInput" type="file" accept=".json,application/json" /></label>
+      </div>
+      <div class="row">
+        <button id="clearLocksBtn">Clear Locks</button>
+      </div>
+      <p class="small">Use locks after you manually fix a region. Refinement will not move locked output slots.</p>
+    </div>
+
+    <div class="section">
+      <h2>View</h2>
+      <div class="row">
+        <label>Zoom</label>
+        <input id="zoomInput" type="range" min="0.1" max="20" step="0.1" value="1" />
+        <span id="zoomLabel">1.0×</span>
+      </div>
+      <div class="row">
+        <button id="fitBtn">Fit</button>
+        <button id="oneBtn">1:1</button>
+      </div>
+      <div class="row">
+        <label><input id="gridToggle" type="checkbox" checked /> grid</label>
+        <label><input id="confidenceToggle" type="checkbox" checked /> confidence overlay</label>
+        <label><input id="highlightToggle" type="checkbox" checked /> highlight</label>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Selected</h2>
+      <div id="selectedInfo" class="stat">none</div>
+    </div>
+
+    <div class="section">
+      <h2>Image Info</h2>
+      <div id="imageInfo" class="stat">No image loaded.</div>
+    </div>
+  </aside>
+
+  <section id="workspace">
+    <div id="viewerWrap">
+      <div class="canvasPanel">
+        <div class="canvasTitle"><span>Editable Draft / Output</span><span id="outputHover"></span></div>
+        <div id="outputBox" class="canvasBox">
+          <canvas id="outputCanvas"></canvas>
+          <canvas id="outputOverlay"></canvas>
+        </div>
+      </div>
+      <div class="canvasPanel">
+        <div class="canvasTitle"><span>Source / Corrupted Pieces</span><span id="sourceHover"></span></div>
+        <div id="sourceBox" class="canvasBox">
+          <canvas id="sourceCanvas"></canvas>
+          <canvas id="sourceOverlay"></canvas>
+        </div>
+      </div>
+    </div>
+    <div id="log">Load an image. Then click Build Editable Draft.</div>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+const $ = id => document.getElementById(id);
+
+const imageInput = $("imageInput");
+const solveBtn = $("solveBtn");
+const refineBtn = $("refineBtn");
+const exportBtn = $("exportBtn");
+const colsInput = $("colsInput");
+const rowsInput = $("rowsInput");
+const applyGridBtn = $("applyGridBtn");
+const resetBtn = $("resetBtn");
+const beamInput = $("beamInput");
+const neighborInput = $("neighborInput");
+const edgeDepthInput = $("edgeDepthInput");
+const roundsInput = $("roundsInput");
+const blankLastToggle = $("blankLastToggle");
+const lockToggle = $("lockToggle");
+const swapModeBtn = $("swapModeBtn");
+const assignModeBtn = $("assignModeBtn");
+const saveMapBtn = $("saveMapBtn");
+const loadMapInput = $("loadMapInput");
+const clearLocksBtn = $("clearLocksBtn");
+const zoomInput = $("zoomInput");
+const zoomLabel = $("zoomLabel");
+const fitBtn = $("fitBtn");
+const oneBtn = $("oneBtn");
+const gridToggle = $("gridToggle");
+const confidenceToggle = $("confidenceToggle");
+const highlightToggle = $("highlightToggle");
+const outputBox = $("outputBox");
+const sourceBox = $("sourceBox");
+const outputCanvas = $("outputCanvas");
+const outputOverlay = $("outputOverlay");
+const sourceCanvas = $("sourceCanvas");
+const sourceOverlay = $("sourceOverlay");
+const outputCtx = outputCanvas.getContext("2d", { willReadFrequently: true });
+const outputOverlayCtx = outputOverlay.getContext("2d");
+const sourceCtx = sourceCanvas.getContext("2d", { willReadFrequently: true });
+const sourceOverlayCtx = sourceOverlay.getContext("2d");
+const logBox = $("log");
+const selectedInfo = $("selectedInfo");
+const imageInfo = $("imageInfo");
+const outputHover = $("outputHover");
+const sourceHover = $("sourceHover");
+
+let file = null;
+let img = null;
+let width = 0;
+let height = 0;
+let cols = 5;
+let rows = 5;
+let tileW = 0;
+let tileH = 0;
+let total = 0;
+let mapping = [];
+let locked = [];
+let confidence = [];
+let features = [];
+let neighborRank = null;
+let pairCache = { right: [], left: [], down: [], up: [] };
+
+let sourceBitmap = document.createElement("canvas");
+let sourceBitmapCtx = sourceBitmap.getContext("2d", { willReadFrequently: true });
+
+let zoom = 1;
+let panX = 0;
+let panY = 0;
+let isPanning = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+let mode = "swap";
+let selectedDest = null;
+let selectedSource = null;
+let firstSwap = null;
+
+function log(msg) {
+  logBox.textContent += "\n" + msg;
+  logBox.scrollTop = logBox.scrollHeight;
+}
+
+function clearLog(msg) { logBox.textContent = msg; }
+function requireImage() { if (!img) { log("ERROR: no image loaded."); return false; } return true; }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function index(x, y) { return y * cols + x; }
+function xy(i) { return { x: i % cols, y: Math.floor(i / cols) }; }
+function validGridPos(x, y) { return x >= 0 && y >= 0 && x < cols && y < rows; }
+function opposite(dir) { return dir === "right" ? "left" : dir === "left" ? "right" : dir === "down" ? "up" : "down"; }
+
+function rectOfTile(i) {
+  const p = xy(i);
+  return { x0: p.x * tileW, y0: p.y * tileH, x1: (p.x + 1) * tileW, y1: (p.y + 1) * tileH, w: tileW, h: tileH };
+}
+
+function getTileFromEvent(event, box) {
+  const rect = box.getBoundingClientRect();
+  const sx = event.clientX - rect.left;
+  const sy = event.clientY - rect.top;
+  const ix = (sx - panX) / zoom;
+  const iy = (sy - panY) / zoom;
+  const gx = Math.floor(ix / tileW);
+  const gy = Math.floor(iy / tileH);
+  if (!validGridPos(gx, gy)) return null;
+  return { x: gx, y: gy, index: index(gx, gy) };
+}
+
+async function loadImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => { URL.revokeObjectURL(url); resolve(image); };
+    image.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Failed to load image.")); };
+    image.src = url;
+  });
+}
+
+async function loadCurrentImage() {
+  if (!file) return;
+  img = await loadImageFile(file);
+  width = img.naturalWidth;
+  height = img.naturalHeight;
+
+  sourceBitmap.width = width;
+  sourceBitmap.height = height;
+  sourceBitmapCtx.clearRect(0, 0, width, height);
+  sourceBitmapCtx.drawImage(img, 0, 0);
+
+  for (const c of [outputCanvas, outputOverlay, sourceCanvas, sourceOverlay]) {
+    c.width = width;
+    c.height = height;
+  }
+
+  sourceCtx.clearRect(0, 0, width, height);
+  sourceCtx.drawImage(sourceBitmap, 0, 0);
+  applyGrid();
+  clearLog(`Loaded: ${file.name}`);
+  log(`Size: ${width}x${height}`);
+}
+
+function applyGrid() {
+  if (!requireImage()) return;
+  cols = Math.max(1, parseInt(colsInput.value, 10) || 5);
+  rows = Math.max(1, parseInt(rowsInput.value, 10) || 5);
+  tileW = width / cols;
+  tileH = height / rows;
+  total = cols * rows;
+  mapping = Array.from({ length: total }, (_, i) => i);
+  locked = Array.from({ length: total }, () => false);
+  confidence = Array.from({ length: total }, () => 0);
+  selectedDest = selectedSource = firstSwap = null;
+  analyzePieces();
+  rebuildOutput();
+  fitView();
+  updateTransform();
+  updateInfo();
+  updateSelected();
+  log(`Grid: ${cols} columns x ${rows} rows (${total} pieces)`);
+  log(`Piece size: ${tileW.toFixed(2)} x ${tileH.toFixed(2)}`);
+}
+
+function updateInfo() {
+  if (!img) { imageInfo.textContent = "No image loaded."; return; }
+  const avgConf = confidence.length ? confidence.reduce((a,b)=>a+b,0) / confidence.length : 0;
+  const locks = locked.filter(Boolean).length;
+  imageInfo.textContent = `image: ${width}x${height}\ngrid: ${cols}x${rows}\npieces: ${total}\npiece size: ${tileW.toFixed(2)}x${tileH.toFixed(2)}\nlocked slots: ${locks}\navg confidence: ${(avgConf * 100).toFixed(1)}%`;
+}
+
+function updateSelected() {
+  const lines = [];
+  if (selectedDest !== null) {
+    const d = xy(selectedDest);
+    const s = mapping[selectedDest];
+    const sp = xy(s);
+    lines.push(`dest: #${selectedDest} (${d.x}, ${d.y})`);
+    lines.push(`src:  #${s} (${sp.x}, ${sp.y})`);
+    lines.push(`conf: ${(confidence[selectedDest] * 100).toFixed(1)}%`);
+    lines.push(`locked: ${locked[selectedDest] ? "yes" : "no"}`);
+  }
+  if (selectedSource !== null) {
+    const s = xy(selectedSource);
+    lines.push(`selected source: #${selectedSource} (${s.x}, ${s.y})`);
+  }
+  if (firstSwap !== null) {
+    const f = xy(firstSwap);
+    lines.push(`first swap: #${firstSwap} (${f.x}, ${f.y})`);
+  }
+  selectedInfo.textContent = lines.length ? lines.join("\n") : "none";
+  updateInfo();
+}
+
+function rebuildOutput() {
+  if (!requireImage()) return;
+  outputCtx.clearRect(0, 0, width, height);
+  outputCtx.imageSmoothingEnabled = false;
+  for (let d = 0; d < total; d++) {
+    const src = mapping[d];
+    const sr = rectOfTile(src);
+    const dr = rectOfTile(d);
+    outputCtx.drawImage(sourceBitmap, sr.x0, sr.y0, sr.w, sr.h, dr.x0, dr.y0, dr.w, dr.h);
+  }
+  drawOverlays();
+}
+
+function fitView() {
+  if (!img) return;
+  const a = outputBox.getBoundingClientRect();
+  const b = sourceBox.getBoundingClientRect();
+  const usableW = Math.min(a.width, b.width);
+  const usableH = Math.min(a.height, b.height);
+  zoom = Math.min(usableW / width, usableH / height) * 0.95;
+  if (!Number.isFinite(zoom) || zoom <= 0) zoom = 1;
+  panX = (usableW - width * zoom) / 2;
+  panY = (usableH - height * zoom) / 2;
+  zoomInput.value = String(clamp(zoom, 0.1, 20));
+  zoomLabel.textContent = `${zoom.toFixed(1)}×`;
+}
+
+function updateTransform() {
+  for (const c of [outputCanvas, outputOverlay, sourceCanvas, sourceOverlay]) {
+    c.style.transformOrigin = "0 0";
+    c.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+  }
+  drawOverlays();
+}
+
+function drawOverlays() {
+  drawOverlay(outputOverlayCtx, "output");
+  drawOverlay(sourceOverlayCtx, "source");
+}
+
+function drawOverlay(ctx, type) {
+  if (!img) return;
+  ctx.clearRect(0, 0, width, height);
+
+  if (confidenceToggle.checked && type === "output") {
+    for (let i = 0; i < total; i++) {
+      const r = rectOfTile(i);
+      const c = confidence[i] || 0;
+      if (locked[i]) ctx.fillStyle = "rgba(119, 240, 255, 0.18)";
+      else if (c < 0.28) ctx.fillStyle = "rgba(255, 112, 112, 0.22)";
+      else if (c < 0.55) ctx.fillStyle = "rgba(255, 211, 106, 0.15)";
+      else ctx.fillStyle = "rgba(121, 223, 141, 0.08)";
+      ctx.fillRect(r.x0, r.y0, r.w, r.h);
+    }
+  }
+
+  if (gridToggle.checked) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(119, 170, 255, 0.45)";
+    ctx.lineWidth = Math.max(1 / zoom, 0.5);
+    for (let x = 0; x <= cols; x++) {
+      const px = x * tileW;
+      ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, height); ctx.stroke();
+    }
+    for (let y = 0; y <= rows; y++) {
+      const py = y * tileH;
+      ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(width, py); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  if (!highlightToggle.checked) return;
+  ctx.save();
+  ctx.lineWidth = Math.max(3 / zoom, 1);
+  if (type === "output") {
+    if (selectedDest !== null) drawTileBox(ctx, selectedDest, "rgba(121,223,141,0.95)");
+    if (firstSwap !== null) drawTileBox(ctx, firstSwap, "rgba(255,211,106,0.95)");
+    for (let i = 0; i < total; i++) if (locked[i]) drawTileBox(ctx, i, "rgba(119,240,255,0.9)");
+  } else {
+    if (selectedSource !== null) drawTileBox(ctx, selectedSource, "rgba(255,112,112,0.95)");
+    if (selectedDest !== null) drawTileBox(ctx, mapping[selectedDest], "rgba(121,223,141,0.95)");
+  }
+  ctx.restore();
+}
+
+function drawTileBox(ctx, i, color) {
+  const r = rectOfTile(i);
+  ctx.strokeStyle = color;
+  ctx.strokeRect(r.x0 + 0.5, r.y0 + 0.5, r.w - 1, r.h - 1);
+}
+
+// -----------------------------
+// No-reference solver
+// -----------------------------
+
+function getPixel(data, x, y) {
+  x = clamp(Math.floor(x), 0, width - 1);
+  y = clamp(Math.floor(y), 0, height - 1);
+  const k = (y * width + x) * 4;
+  return [data[k], data[k+1], data[k+2], data[k+3]];
+}
+
+function dist(a, b) {
+  const dr = a[0] - b[0], dg = a[1] - b[1], db = a[2] - b[2], da = a[3] - b[3];
+  return dr*dr + dg*dg + db*db + da*da*0.1;
+}
+
+function add(acc, c) { acc[0]+=c[0]; acc[1]+=c[1]; acc[2]+=c[2]; acc[3]+=c[3]; }
+function div(acc, n) { return [acc[0]/n, acc[1]/n, acc[2]/n, acc[3]/n]; }
+
+function sampleLine(data, tile, side, offset, samples) {
+  const r = rectOfTile(tile);
+  const out = [];
+  const maxX = Math.max(1, r.w - 1);
+  const maxY = Math.max(1, r.h - 1);
+  for (let i = 0; i < samples; i++) {
+    const t = samples === 1 ? 0.5 : i / (samples - 1);
+    let x = r.x0, y = r.y0;
+    if (side === "left") { x = r.x0 + offset; y = r.y0 + t * maxY; }
+    if (side === "right") { x = r.x1 - 1 - offset; y = r.y0 + t * maxY; }
+    if (side === "top") { x = r.x0 + t * maxX; y = r.y0 + offset; }
+    if (side === "bottom") { x = r.x0 + t * maxX; y = r.y1 - 1 - offset; }
+    out.push(getPixel(data, x, y));
+  }
+  return out;
+}
+
+function sampleStrip(data, tile, side, depth, samples) {
+  const lines = [];
+  for (let d = 0; d < depth; d++) lines.push(sampleLine(data, tile, side, d, samples));
+  const out = [];
+  for (let i = 0; i < samples; i++) {
+    const acc = [0,0,0,0];
+    for (let d = 0; d < depth; d++) add(acc, lines[d][i]);
+    out.push(div(acc, depth));
+  }
+  return out;
+}
+
+function profileDist(a, b) {
+  const n = Math.min(a.length, b.length);
+  let s = 0;
+  for (let i = 0; i < n; i++) s += dist(a[i], b[i]);
+  return s / Math.max(1, n);
+}
+
+function gradientProfile(aEdge, aInner, bEdge, bInner) {
+  return profileDist(aInner, bEdge) * 0.6 + profileDist(aEdge, bInner) * 0.4;
+}
+
+function tileStats(data, tile) {
+  const r = rectOfTile(tile);
+  const sx = Math.max(1, Math.floor(r.w / 14));
+  const sy = Math.max(1, Math.floor(r.h / 14));
+  let count = 0;
+  const mean = [0,0,0,0];
+  const pts = [];
+  for (let y = r.y0; y < r.y1; y += sy) {
+    for (let x = r.x0; x < r.x1; x += sx) {
+      const c = getPixel(data, x, y);
+      pts.push(c); add(mean, c); count++;
+    }
+  }
+  const m = div(mean, Math.max(1, count));
+  let variance = 0;
+  for (const p of pts) variance += dist(p, m);
+  variance /= Math.max(1, pts.length);
+  return { mean: m, variance };
+}
+
+function corners(data, tile) {
+  const r = rectOfTile(tile);
+  return {
+    tl: getPixel(data, r.x0, r.y0),
+    tr: getPixel(data, r.x1 - 1, r.y0),
+    bl: getPixel(data, r.x0, r.y1 - 1),
+    br: getPixel(data, r.x1 - 1, r.y1 - 1)
+  };
+}
+
+function analyzePieces() {
+  if (!img) return;
+  const data = sourceBitmapCtx.getImageData(0, 0, width, height).data;
+  const depth = Math.max(1, parseInt(edgeDepthInput.value, 10) || 5);
+  const samples = clamp(Math.floor(Math.max(tileW, tileH)), 28, 96);
+  features = [];
+  for (let i = 0; i < total; i++) {
+    const st = tileStats(data, i);
+    features.push({
+      mean: st.mean,
+      variance: st.variance,
+      reliability: clamp(st.variance / 3500, 0.05, 1),
+      corners: corners(data, i),
+      edge: {
+        left: sampleLine(data, i, "left", 0, samples),
+        right: sampleLine(data, i, "right", 0, samples),
+        top: sampleLine(data, i, "top", 0, samples),
+        bottom: sampleLine(data, i, "bottom", 0, samples)
+      },
+      inner: {
+        left: sampleStrip(data, i, "left", depth, samples),
+        right: sampleStrip(data, i, "right", depth, samples),
+        top: sampleStrip(data, i, "top", depth, samples),
+        bottom: sampleStrip(data, i, "bottom", depth, samples)
+      },
+      deep: {
+        left: sampleLine(data, i, "left", depth, samples),
+        right: sampleLine(data, i, "right", depth, samples),
+        top: sampleLine(data, i, "top", depth, samples),
+        bottom: sampleLine(data, i, "bottom", depth, samples)
+      }
+    });
+  }
+  buildPairCaches();
+}
+
+function cornerCost(a, b, dir) {
+  const A = features[a].corners, B = features[b].corners;
+  if (dir === "right") return (dist(A.tr, B.tl) + dist(A.br, B.bl)) / 2;
+  if (dir === "left") return (dist(A.tl, B.tr) + dist(A.bl, B.br)) / 2;
+  if (dir === "down") return (dist(A.bl, B.tl) + dist(A.br, B.tr)) / 2;
+  if (dir === "up") return (dist(A.tl, B.bl) + dist(A.tr, B.br)) / 2;
+  return 0;
+}
+
+function seamCostRaw(a, b, dir) {
+  const opp = opposite(dir);
+  const A = features[a], B = features[b];
+  const direct = profileDist(A.edge[dir], B.edge[opp]);
+  const strip = profileDist(A.inner[dir], B.inner[opp]);
+  const grad = gradientProfile(A.edge[dir], A.deep[dir], B.edge[opp], B.deep[opp]);
+  const cc = cornerCost(a, b, dir);
+  const mean = dist(A.mean, B.mean) * 0.025;
+  const reliability = Math.sqrt(A.reliability * B.reliability);
+  const blankPenalty = (1 - reliability) * 4500;
+  return direct * 1.0 + strip * 0.55 + grad * 0.62 + cc * 0.45 + mean + blankPenalty;
+}
+
+function buildPairCaches() {
+  const dirs = ["right", "left", "down", "up"];
+  pairCache = { right: [], left: [], down: [], up: [] };
+  neighborRank = { right: [], left: [], down: [], up: [] };
+  for (const dir of dirs) {
+    for (let a = 0; a < total; a++) {
+      const arr = [];
+      for (let b = 0; b < total; b++) if (a !== b) arr.push({ tile: b, cost: seamCostRaw(a, b, dir) });
+      arr.sort((x, y) => x.cost - y.cost);
+      pairCache[dir][a] = arr;
+      const ranks = new Map();
+      for (let i = 0; i < arr.length; i++) ranks.set(arr[i].tile, i);
+      neighborRank[dir][a] = ranks;
+    }
+  }
+}
+
+function rankBonus(a, b, dir) {
+  const r1 = neighborRank[dir][a]?.get(b) ?? 9999;
+  const r2 = neighborRank[opposite(dir)][b]?.get(a) ?? 9999;
+  if (r1 < 12 && r2 < 12) return -1800 / (1 + r1 + r2);
+  if (r1 < 24 && r2 < 24) return -600 / (1 + r1 + r2);
+  return 0;
+}
+
+function seamCost(a, b, dir) {
+  return seamCostRaw(a, b, dir) + rankBonus(a, b, dir);
+}
+
+function slotNeighbors(slot, map) {
+  const p = xy(slot);
+  const out = [];
+  if (p.x > 0 && map[index(p.x - 1, p.y)] !== null) out.push({ tile: map[index(p.x - 1, p.y)], dir: "right", side: "fromLeft" });
+  if (p.y > 0 && map[index(p.x, p.y - 1)] !== null) out.push({ tile: map[index(p.x, p.y - 1)], dir: "down", side: "fromUp" });
+  if (p.x + 1 < cols && map[index(p.x + 1, p.y)] !== null) out.push({ tile: map[index(p.x + 1, p.y)], dir: "left", side: "fromRight" });
+  if (p.y + 1 < rows && map[index(p.x, p.y + 1)] !== null) out.push({ tile: map[index(p.x, p.y + 1)], dir: "up", side: "fromDown" });
+  return out;
+}
+
+function candidateCostForSlot(map, slot, cand) {
+  const ns = slotNeighbors(slot, map);
+  if (ns.length === 0) return -features[cand].variance * 0.18;
+  let cost = 0;
+  for (const n of ns) {
+    if (n.side === "fromLeft") cost += seamCost(n.tile, cand, "right");
+    if (n.side === "fromUp") cost += seamCost(n.tile, cand, "down");
+    if (n.side === "fromRight") cost += seamCost(n.tile, cand, "left");
+    if (n.side === "fromDown") cost += seamCost(n.tile, cand, "up");
+  }
+  return cost / ns.length;
+}
+
+function chooseNextSlot(map) {
+  let best = -1;
+  let bestScore = -Infinity;
+  for (let i = 0; i < total; i++) {
+    if (map[i] !== null) continue;
+    const ns = slotNeighbors(i, map).length;
+    if (ns === 0) continue;
+    const p = xy(i);
+    const centerBias = -Math.abs(p.x - cols / 2) - Math.abs(p.y - rows / 2);
+    const score = ns * 100 + centerBias;
+    if (score > bestScore) { bestScore = score; best = i; }
+  }
+  if (best !== -1) return best;
+  return map.findIndex(v => v === null);
+}
+
+function candidateSetForSlot(map, slot, unused) {
+  const ns = slotNeighbors(slot, map);
+  const lim = Math.max(4, parseInt(neighborInput.value, 10) || 24);
+  const set = new Set();
+  for (const n of ns) {
+    let dir;
+    if (n.side === "fromLeft") dir = "right";
+    if (n.side === "fromUp") dir = "down";
+    if (n.side === "fromRight") dir = "left";
+    if (n.side === "fromDown") dir = "up";
+    const list = pairCache[dir][n.tile];
+    for (let i = 0; i < Math.min(lim, list.length); i++) if (unused.has(list[i].tile)) set.add(list[i].tile);
+  }
+  if (set.size < Math.min(6, unused.size)) {
+    const detailed = [...unused].sort((a,b)=>features[b].variance-features[a].variance).slice(0, Math.min(lim, unused.size));
+    for (const d of detailed) set.add(d);
+  }
+  if (set.size === 0) for (const u of unused) set.add(u);
+  let arr = [...set];
+  if (blankLastToggle.checked) arr.sort((a,b)=>features[b].reliability-features[a].reliability);
+  return arr;
+}
+
+function draftSolve() {
+  if (!requireImage()) return;
+  analyzePieces();
+  log("Building no-reference editable draft...");
+
+  const beamWidth = Math.max(1, parseInt(beamInput.value, 10) || 24);
+  const anchorSlot = index(Math.floor(cols / 2), Math.floor(rows / 2));
+  const detailed = [...Array(total).keys()].sort((a,b)=>features[b].variance - features[a].variance);
+  const anchorTiles = detailed.slice(0, Math.min(4, total));
+  let beams = anchorTiles.map(t => {
+    const map = Array.from({ length: total }, () => null);
+    const unused = new Set(Array.from({ length: total }, (_, i) => i));
+    map[anchorSlot] = t;
+    unused.delete(t);
+    return { map, unused, score: -features[t].variance * 0.2 };
+  });
+
+  while (beams.length && beams[0].unused.size > 0) {
+    const next = [];
+    for (const beam of beams) {
+      const slot = chooseNextSlot(beam.map);
+      if (slot < 0) continue;
+      const candidates = candidateSetForSlot(beam.map, slot, beam.unused).slice(0, Math.max(8, Math.floor(beamWidth * 0.75)));
+      for (const cand of candidates) {
+        const c = candidateCostForSlot(beam.map, slot, cand);
+        const nm = beam.map.slice();
+        const nu = new Set(beam.unused);
+        nm[slot] = cand;
+        nu.delete(cand);
+        next.push({ map: nm, unused: nu, score: beam.score + c });
+      }
+    }
+    next.sort((a,b)=>a.score-b.score);
+    beams = next.slice(0, beamWidth);
+  }
+
+  if (!beams.length) { log("ERROR: draft solver failed."); return; }
+  mapping = beams[0].map;
+  estimateConfidence();
+  refineLayout(false, true);
+  rebuildOutput();
+  log(`Draft complete. Seam cost: ${layoutCost(mapping).toFixed(2)}. Red tiles are low confidence; fix those first.`);
+  updateSelected();
+}
+
+function estimateConfidence() {
+  confidence = Array.from({ length: total }, (_, slot) => {
+    const p = xy(slot);
+    const here = mapping[slot];
+    let vals = [];
+    if (p.x > 0) vals.push(seamCost(mapping[index(p.x - 1, p.y)], here, "right"));
+    if (p.y > 0) vals.push(seamCost(mapping[index(p.x, p.y - 1)], here, "down"));
+    if (p.x + 1 < cols) vals.push(seamCost(here, mapping[index(p.x + 1, p.y)], "right"));
+    if (p.y + 1 < rows) vals.push(seamCost(here, mapping[index(p.x, p.y + 1)], "down"));
+    if (!vals.length) return 0.5;
+    const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
+    const rel = features[here].reliability;
+    return clamp((1 / (1 + avg / 4500)) * 0.72 + rel * 0.28, 0, 1);
+  });
+}
+
+function layoutCost(map) {
+  let c = 0, n = 0;
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+    const a = map[index(x,y)];
+    if (x + 1 < cols) { c += seamCost(a, map[index(x+1,y)], "right"); n++; }
+    if (y + 1 < rows) { c += seamCost(a, map[index(x,y+1)], "down"); n++; }
+  }
+  return c / Math.max(1, n);
+}
+
+function localCost(map, slot) {
+  const p = xy(slot), a = map[slot];
+  let c = 0, n = 0;
+  if (p.x > 0) { c += seamCost(map[index(p.x-1,p.y)], a, "right"); n++; }
+  if (p.y > 0) { c += seamCost(map[index(p.x,p.y-1)], a, "down"); n++; }
+  if (p.x + 1 < cols) { c += seamCost(a, map[index(p.x+1,p.y)], "right"); n++; }
+  if (p.y + 1 < rows) { c += seamCost(a, map[index(p.x,p.y+1)], "down"); n++; }
+  return c / Math.max(1, n);
+}
+
+function affectedSlots(a, b) {
+  const set = new Set();
+  for (const s of [a,b]) {
+    const p = xy(s);
+    set.add(s);
+    if (p.x > 0) set.add(index(p.x-1,p.y));
+    if (p.x + 1 < cols) set.add(index(p.x+1,p.y));
+    if (p.y > 0) set.add(index(p.x,p.y-1));
+    if (p.y + 1 < rows) set.add(index(p.x,p.y+1));
+  }
+  return set;
+}
+
+function swapDelta(map, a, b) {
+  if (a === b || locked[a] || locked[b]) return Infinity;
+  const affected = affectedSlots(a, b);
+  let before = 0;
+  for (const s of affected) before += localCost(map, s);
+  const tmp = map[a]; map[a] = map[b]; map[b] = tmp;
+  let after = 0;
+  for (const s of affected) after += localCost(map, s);
+  map[b] = map[a]; map[a] = tmp;
+  return after - before;
+}
+
+function refineLayout(shouldRebuild = true, silent = false) {
+  if (!requireImage()) return;
+  analyzePieces();
+  const rounds = Math.max(1, parseInt(roundsInput.value, 10) || 35);
+  let accepted = 0;
+  let temperature = 2500;
+
+  const movable = () => [...Array(total).keys()].filter(i => !locked[i]);
+
+  for (let round = 0; round < rounds; round++) {
+    const slots = movable().sort((a,b)=>(confidence[a]||0)-(confidence[b]||0));
+    for (const a of slots) {
+      let bestB = -1;
+      let bestDelta = 0;
+      const p = xy(a);
+      const candidates = new Set();
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const nx = p.x + dx, ny = p.y + dy;
+        if (validGridPos(nx, ny)) candidates.add(index(nx, ny));
+      }
+      for (let t = 0; t < Math.min(total, 140); t++) candidates.add(Math.floor(Math.random() * total));
+      for (const b of candidates) {
+        if (locked[b]) continue;
+        const d = swapDelta(mapping, a, b);
+        const anneal = d < 0 ? d : (Math.random() < Math.exp(-d / Math.max(1, temperature)) ? -0.001 : d);
+        if (anneal < bestDelta) { bestDelta = anneal; bestB = b; }
+      }
+      if (bestB !== -1) {
+        const tmp = mapping[a]; mapping[a] = mapping[bestB]; mapping[bestB] = tmp;
+        accepted++;
+      }
+    }
+    temperature *= 0.93;
+    estimateConfidence();
+  }
+  estimateConfidence();
+  if (shouldRebuild) {
+    rebuildOutput();
+    log(`Refined draft. Accepted swaps: ${accepted}. Seam cost: ${layoutCost(mapping).toFixed(2)}`);
+    updateSelected();
+  } else if (!silent) {
+    log(`Refined internally. Accepted swaps: ${accepted}.`);
+  }
+}
+
+function setMode(newMode) {
+  mode = newMode;
+  swapModeBtn.classList.toggle("active", mode === "swap");
+  assignModeBtn.classList.toggle("active", mode === "assign");
+  firstSwap = selectedDest = selectedSource = null;
+  updateSelected();
+  drawOverlays();
+  log(`Mode: ${mode}`);
+}
+
+function handleOutputClick(event) {
+  if (!requireImage()) return;
+  const hit = getTileFromEvent(event, outputBox);
+  if (!hit) return;
+
+  if (lockToggle.checked) {
+    locked[hit.index] = !locked[hit.index];
+    selectedDest = hit.index;
+    updateSelected();
+    drawOverlays();
+    log(`${locked[hit.index] ? "Locked" : "Unlocked"} output slot #${hit.index}.`);
+    return;
+  }
+
+  selectedDest = hit.index;
+  if (mode === "swap") {
+    if (firstSwap === null) firstSwap = hit.index;
+    else if (firstSwap === hit.index) firstSwap = null;
+    else {
+      if (locked[firstSwap] || locked[hit.index]) log("One of those slots is locked. Unlock it first.");
+      else {
+        const tmp = mapping[firstSwap]; mapping[firstSwap] = mapping[hit.index]; mapping[hit.index] = tmp;
+        confidence[firstSwap] = confidence[hit.index] = 1;
+        log(`Swapped output #${firstSwap} and #${hit.index}.`);
+        firstSwap = null;
+        estimateConfidence();
+        rebuildOutput();
+      }
+    }
+  } else if (mode === "assign" && selectedSource !== null) {
+    if (locked[selectedDest]) log("Destination slot is locked. Unlock it first.");
+    else {
+      mapping[selectedDest] = selectedSource;
+      confidence[selectedDest] = 1;
+      estimateConfidence();
+      rebuildOutput();
+      log(`Assigned source #${selectedSource} to output #${selectedDest}.`);
+    }
+  }
+  updateSelected();
+  drawOverlays();
+}
+
+function handleSourceClick(event) {
+  if (!requireImage()) return;
+  const hit = getTileFromEvent(event, sourceBox);
+  if (!hit) return;
+  selectedSource = hit.index;
+  if (mode === "assign" && selectedDest !== null) {
+    if (locked[selectedDest]) log("Destination slot is locked. Unlock it first.");
+    else {
+      mapping[selectedDest] = selectedSource;
+      confidence[selectedDest] = 1;
+      estimateConfidence();
+      rebuildOutput();
+      log(`Assigned source #${selectedSource} to output #${selectedDest}.`);
+    }
+  }
+  updateSelected();
+  drawOverlays();
+}
+
+function handleHover(event, box, label, type) {
+  if (!img) return;
+  const hit = getTileFromEvent(event, box);
+  if (!hit) { label.textContent = ""; return; }
+  if (type === "output") label.textContent = `output #${hit.index} -> source #${mapping[hit.index]} | conf ${(confidence[hit.index]*100).toFixed(0)}%${locked[hit.index] ? " | locked" : ""}`;
+  else label.textContent = `source #${hit.index}`;
+}
+
+function saveMap() {
+  if (!requireImage()) return;
+  const data = { tool: "no_reference_region_repair", version: 1, width, height, cols, rows, mappingType: "destIndex_to_sourceIndex", mapping, locked, confidence };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `no_reference_map_${width}x${height}_${cols}x${rows}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  log("Saved map.");
+}
+
+async function loadMap(f) {
+  if (!requireImage()) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch { log("ERROR: bad JSON map."); return; }
+  if (data.width !== width || data.height !== height) { log("ERROR: map size does not match image."); return; }
+  colsInput.value = data.cols; rowsInput.value = data.rows;
+  cols = data.cols; rows = data.rows; tileW = width / cols; tileH = height / rows; total = cols * rows;
+  if (!Array.isArray(data.mapping) || data.mapping.length !== total) { log("ERROR: invalid mapping."); return; }
+  mapping = data.mapping.slice();
+  locked = Array.isArray(data.locked) && data.locked.length === total ? data.locked.slice() : Array.from({length: total}, ()=>false);
+  confidence = Array.isArray(data.confidence) && data.confidence.length === total ? data.confidence.slice() : Array.from({length: total}, ()=>0.5);
+  analyzePieces();
+  estimateConfidence();
+  rebuildOutput();
+  updateInfo(); updateSelected();
+  log(`Loaded map: ${f.name}`);
+}
+
+function exportPng() {
+  if (!requireImage()) return;
+  rebuildOutput();
+  outputCanvas.toBlob(blob => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = file ? file.name.replace(/\.[^.]+$/, "") + "_fixed.png" : "fixed.png";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }, "image/png");
+  log("Exported PNG.");
+}
+
+function setZoom(newZoom, cx = null, cy = null, box = null) {
+  const old = zoom;
+  zoom = clamp(newZoom, 0.1, 20);
+  if (cx !== null && cy !== null && box) {
+    const r = box.getBoundingClientRect();
+    const sx = cx - r.left, sy = cy - r.top;
+    const ix = (sx - panX) / old, iy = (sy - panY) / old;
+    panX = sx - ix * zoom; panY = sy - iy * zoom;
+  }
+  zoomInput.value = String(zoom);
+  zoomLabel.textContent = `${zoom.toFixed(1)}×`;
+  updateTransform();
+}
+
+function handleWheel(event) { if (!img) return; event.preventDefault(); setZoom(zoom * (event.deltaY < 0 ? 1.15 : 1/1.15), event.clientX, event.clientY, event.currentTarget); }
+function beginPan(event) { if (event.button !== 1 && !event.shiftKey) return; isPanning = true; lastMouseX = event.clientX; lastMouseY = event.clientY; event.preventDefault(); }
+function movePan(event) { if (!isPanning) return; panX += event.clientX - lastMouseX; panY += event.clientY - lastMouseY; lastMouseX = event.clientX; lastMouseY = event.clientY; updateTransform(); }
+function endPan() { isPanning = false; }
+
+imageInput.addEventListener("change", async () => { file = imageInput.files[0] || null; if (file) await loadCurrentImage(); });
+solveBtn.addEventListener("click", draftSolve);
+refineBtn.addEventListener("click", () => refineLayout(true));
+exportBtn.addEventListener("click", exportPng);
+applyGridBtn.addEventListener("click", applyGrid);
+resetBtn.addEventListener("click", () => { if (!requireImage()) return; mapping = Array.from({length: total}, (_,i)=>i); locked = Array.from({length: total}, ()=>false); confidence = Array.from({length: total}, ()=>0); rebuildOutput(); updateSelected(); log("Reset to identity map."); });
+swapModeBtn.addEventListener("click", () => setMode("swap"));
+assignModeBtn.addEventListener("click", () => setMode("assign"));
+saveMapBtn.addEventListener("click", saveMap);
+loadMapInput.addEventListener("change", async () => { const f = loadMapInput.files[0]; if (f) await loadMap(f); });
+clearLocksBtn.addEventListener("click", () => { locked = Array.from({length: total}, ()=>false); drawOverlays(); updateSelected(); log("Cleared locks."); });
+fitBtn.addEventListener("click", () => { fitView(); updateTransform(); });
+oneBtn.addEventListener("click", () => { zoom = 1; panX = 20; panY = 20; zoomInput.value = "1"; zoomLabel.textContent = "1.0×"; updateTransform(); });
+zoomInput.addEventListener("input", () => setZoom(parseFloat(zoomInput.value)));
+gridToggle.addEventListener("change", drawOverlays);
+confidenceToggle.addEventListener("change", drawOverlays);
+highlightToggle.addEventListener("change", drawOverlays);
+outputBox.addEventListener("click", handleOutputClick);
+sourceBox.addEventListener("click", handleSourceClick);
+outputBox.addEventListener("mousemove", e => handleHover(e, outputBox, outputHover, "output"));
+sourceBox.addEventListener("mousemove", e => handleHover(e, sourceBox, sourceHover, "source"));
+for (const box of [outputBox, sourceBox]) { box.addEventListener("wheel", handleWheel, { passive: false }); box.addEventListener("mousedown", beginPan); }
+window.addEventListener("mousemove", movePan);
+window.addEventListener("mouseup", endPan);
+window.addEventListener("keydown", e => {
+  if (!img) return;
+  if (e.key === "Escape") { selectedDest = selectedSource = firstSwap = null; updateSelected(); drawOverlays(); }
+  if (e.key === "1") setMode("swap");
+  if (e.key === "2") setMode("assign");
+  if (e.key.toLowerCase() === "f") { fitView(); updateTransform(); }
+  if (e.key.toLowerCase() === "l" && selectedDest !== null) { locked[selectedDest] = !locked[selectedDest]; updateSelected(); drawOverlays(); }
+});
+
+clearLog(`Load an image, then click Build Editable Draft.
+
+Controls:
+- Mouse wheel: zoom
+- Shift + drag or middle mouse: pan
+- 1: swap mode
+- 2: assign source mode
+- F: fit
+- L: lock selected output slot
+- Esc: clear selection
+
+Workflow:
+1. Load corrupted image.
+2. Leave default 5x5 or set real columns/rows.
+3. Click Build Editable Draft.
+4. Fix red/low-confidence pieces manually.
+5. Lock fixed regions.
+6. Click Refine Draft.
+7. Save map or export PNG.`);
+</script>
+</body>
+</html>
